@@ -147,7 +147,8 @@
     <h1>PMAI Sales Invoice System</h1>
     <button class="primary" id="btnNew" onclick="newInvoice()">＋ New</button>
     <button class="primary" id="btnSave" onclick="saveInvoice()">💾 Save</button>
-    <select id="savedList" onchange="loadSelected()" title="Saved invoices"><option value="">— Loading… —</option></select>
+    <input id="searchInv" list="invList" autocomplete="off" placeholder="🔎 Search invoice no." onchange="searchInvoice()" onkeydown="if(event.key==='Enter')searchInvoice()" style="padding:7px 9px;border-radius:7px;border:1px solid #c4ccd4;width:180px">
+    <datalist id="invList"></datalist>
     <button id="btnPrint" onclick="doPrint()">🖨 Print on form</button>
     <button id="btnTxn" onclick="openTxn()">📋 Transactions</button>
     <button id="btnDb" onclick="openDb()">📇 Database</button>
@@ -1089,7 +1090,7 @@ async function txnOpen(no, doprint){
   if(!row){ const {data}=await sb.from('pmai_invoices').select('*').eq('invoice_no',no).maybeSingle(); row=data; }
   if(!row){ alert('Invoice '+no+' not found.'); return; }
   apply(row);
-  $('savedList').value=no;
+  if($('searchInv'))$('searchInv').value=no;
   closeTxn();
   if(doprint){ setTimeout(()=>doPrint(), 250); }
   else { setStatus('Opened No. '+no+(can.edit()?' — edit then Save':' (view/print only)')); }
@@ -1139,14 +1140,16 @@ async function refreshList(keep){
   const {data,error}=await sb.from('pmai_invoices').select('*').order('invoice_no');
   if(error){setStatus('⚠ '+error.message);return;}
   CACHE={}; data.forEach(r=>CACHE[r.invoice_no]=r);
-  const sel=$('savedList');
-  sel.innerHTML='<option value="">— Saved invoices ('+data.length+') —</option>';
-  data.forEach(r=>{
-    const o=document.createElement('option'); o.value=r.invoice_no;
-    o.textContent='No. '+r.invoice_no+' — '+(r.cust_name||'(no name)')+(r.invoice_date?' · '+r.invoice_date:'');
-    sel.appendChild(o);
-  });
-  if(keep)sel.value=keep;
+  const dl=$('invList');
+  if(dl){ dl.innerHTML=''; data.forEach(r=>{ const o=document.createElement('option'); o.value=r.invoice_no; o.label=(r.cust_name||'(no name)')+(r.invoice_date?' · '+r.invoice_date:''); dl.appendChild(o); }); }
+  if(keep && $('searchInv')) $('searchInv').value=keep;
+}
+async function searchInvoice(){
+  const no=$('searchInv').value.trim(); if(!no)return;
+  let row=CACHE[no];
+  if(!row){ const {data}=await sb.from('pmai_invoices').select('*').eq('invoice_no',no).maybeSingle(); row=data; }
+  if(!row){ setStatus('No saved invoice No. '+no); alert('No saved invoice with number '+no+'.'); return; }
+  apply(row); setStatus('Loaded No. '+no);
 }
 let LOADED_NUMS=new Set(), NUM_ASSIGN={}, NUM_ROWS=[];
 async function loadNumbers(){
@@ -1181,7 +1184,6 @@ async function saveInvoice(){
   saveMastersFromInvoice(d);
   setStatus('✓ Saved No. '+d.invoice_no+' · '+new Date().toLocaleTimeString());
 }
-function loadSelected(){ const no=$('savedList').value; if(!no)return; if(CACHE[no])apply(CACHE[no]); }
 async function deleteCurrent(){
   if(!can.del()){alert('Only an Admin can delete invoices.');return;}
   const no=$('invNo').value.trim();
@@ -1197,7 +1199,7 @@ function newInvoice(){
   const n=nextNumber();
   $('invNo').value=n;
   $('invDate').value=new Date().toISOString().slice(0,10);
-  $('savedList').value='';
+  if($('searchInv'))$('searchInv').value='';
   setStatus(n?'New invoice':'⚠ No invoice numbers available — load booklet numbers in 📇 Database → Invoice Numbers');
 }
 
