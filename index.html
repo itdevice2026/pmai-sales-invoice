@@ -297,6 +297,27 @@
   </div>
 </div>
 
+<!-- BOOKLET EDIT -->
+<div class="modal" id="bkEditModal">
+  <div class="card" style="width:460px;max-height:85vh;overflow:auto">
+    <h2>Edit invoice number series</h2>
+    <label>Booklet label</label>
+    <input id="be_label" type="text" placeholder="Booklet label">
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <label style="flex:1;font-size:12px">From<input id="be_from" type="number"></label>
+      <label style="flex:1;font-size:12px">To<input id="be_to" type="number"></label>
+      <label style="width:80px;font-size:12px">Digits<input id="be_digits" type="number"></label>
+    </div>
+    <p style="margin:12px 0 4px">Who can use (none ticked = Anyone):</p>
+    <div id="be_users" style="display:flex;flex-direction:column;gap:2px;max-height:200px;overflow:auto;border:1px solid #eee;border-radius:6px;padding:6px"></div>
+    <div class="err" id="be_msg"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="primary" onclick="saveEditBooklet()">Save changes</button>
+      <button onclick="document.getElementById('bkEditModal').style.display='none'">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- BOOKLET ACCESS -->
 <div class="modal" id="accessModal">
   <div class="card" style="width:420px;max-height:80vh;overflow:auto">
@@ -914,10 +935,43 @@ function renderBooklets(){
       +'<td style="padding:4px;border-bottom:1px solid #f0f0f0">'+String(mn).padStart(5,'0')+'–'+String(mx).padStart(5,'0')+'</td>'
       +'<td style="padding:4px;border-bottom:1px solid #f0f0f0">'+who+'</td>'
       +'<td style="padding:4px;border-bottom:1px solid #f0f0f0;text-align:center">'+b.used+'/'+b.count+'</td>'
-      +'<td style="padding:4px;border-bottom:1px solid #f0f0f0;text-align:center;white-space:nowrap">'+(isU?'':'<button onclick="openAccess(\''+lab+'\')">Edit access</button> <button onclick="deleteBooklet(\''+lab+'\')">Delete</button>')+'</td></tr>';
+      +'<td style="padding:4px;border-bottom:1px solid #f0f0f0;text-align:center;white-space:nowrap"><button onclick="openEditBooklet(\''+lab+'\')">Edit</button> '+(isU?'':'<button onclick="deleteBooklet(\''+lab+'\')">Delete</button>')+'</td></tr>';
   });
   h+='</table>';
   if($('bkBody'))$('bkBody').innerHTML=h;
+}
+let _beKey='';
+function openEditBooklet(key){
+  _beKey=key;
+  const g=BK_GROUPS[key]||{nums:[0],uids:[]};
+  const mn=Math.min(...g.nums), mx=Math.max(...g.nums);
+  const sample=NUM_ROWS.find(r=>(r.booklet||'(unassigned)')===key);
+  const w=sample?String(sample.number).length:5;
+  $('be_label').value=(key==='(unassigned)')?'':key;
+  $('be_from').value=mn; $('be_to').value=mx; $('be_digits').value=w;
+  $('be_users').innerHTML=userChecklistHtml('bke_', new Set(g.uids||[]));
+  $('be_msg').textContent='';
+  $('bkEditModal').style.display='flex';
+}
+async function saveEditBooklet(){
+  const m=$('be_msg'); m.style.color='#a52a2a';
+  const newLabel=$('be_label').value.trim();
+  const from=parseInt($('be_from').value,10), to=parseInt($('be_to').value,10), w=parseInt($('be_digits').value,10)||5;
+  if(!newLabel){m.textContent='Enter a booklet label.';return;}
+  if(isNaN(from)||isNaN(to)||to<from){m.textContent='Enter a valid From/To range.';return;}
+  if(to-from>5000){m.textContent='Range too large (max 5000).';return;}
+  const uids=checkedUids('bke_'); const emails=uids.map(id=>(DB_USERS.find(u=>u.user_id===id)||{}).email||'');
+  const curNums=NUM_ROWS.filter(r=>(r.booklet||'(unassigned)')===_beKey).map(r=>String(r.number));
+  const desired=new Set(); for(let n=from;n<=to;n++) desired.add(String(n).padStart(w,'0'));
+  const toDelete=curNums.filter(n=>!desired.has(n) && !CACHE[n]);
+  if(toDelete.length){ const {error}=await sb.from('pmai_invoice_numbers').delete().in('number',toDelete); if(error){m.textContent='⚠ '+error.message;return;} }
+  const payload=[...desired].map(n=>({number:n,booklet:newLabel,assignees:uids.length?uids:null,assignee_emails:uids.length?emails:null}));
+  const {error}=await sb.from('pmai_invoice_numbers').upsert(payload,{onConflict:'number'});
+  if(error){m.textContent='⚠ '+error.message;return;}
+  $('bkEditModal').style.display='none';
+  await loadNumbers(); renderBooklets(); dbCounts();
+  $('dbMsg').style.color='#0b3d2e'; $('dbMsg').textContent='✓ Updated series "'+newLabel+'".';
+  if(!$('invNo').value)newInvoice();
 }
 let _accLabel='';
 function openAccess(label){
