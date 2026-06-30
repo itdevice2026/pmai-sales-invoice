@@ -125,6 +125,20 @@
     <input id="liPass" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')signIn()">
     <div class="err" id="liErr"></div>
     <button class="primary" onclick="signIn()">Sign in</button>
+    <div style="text-align:center;margin-top:12px"><a href="#" onclick="forgotPassword();return false;" style="font-size:12px;color:var(--brand)">Forgot password?</a></div>
+  </div>
+</div>
+
+<div class="modal" id="resetPanel">
+  <div class="card">
+    <h2>Set a new password</h2>
+    <p>Enter a new password for your account.</p>
+    <label for="rpPass">New password</label>
+    <input id="rpPass" type="password" autocomplete="new-password" placeholder="At least 6 characters">
+    <label for="rpPass2">Confirm password</label>
+    <input id="rpPass2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')saveNewPassword()">
+    <div class="err" id="rpErr"></div>
+    <button class="primary" onclick="saveNewPassword()">Save password</button>
   </div>
 </div>
 
@@ -311,6 +325,26 @@ async function signIn(){
   await afterLogin();
 }
 async function signOut(){ await sb.auth.signOut(); location.reload(); }
+async function forgotPassword(){
+  const email=$('liEmail').value.trim();
+  if(!email){$('liErr').style.color='#a52a2a';$('liErr').textContent='Type your email above first, then click Forgot password.';return;}
+  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  if(error){$('liErr').style.color='#a52a2a';$('liErr').textContent=error.message;return;}
+  $('liErr').style.color='#0b3d2e';
+  $('liErr').textContent='Reset link sent to '+email+'. Open it on this device, then set a new password.';
+}
+function showReset(){ $('loginPanel').style.display='none'; $('appRoot').style.display='none'; $('resetPanel').style.display='flex'; }
+async function saveNewPassword(){
+  $('rpErr').textContent='';
+  const p=$('rpPass').value, p2=$('rpPass2').value;
+  if(p.length<6){$('rpErr').textContent='Password must be at least 6 characters.';return;}
+  if(p!==p2){$('rpErr').textContent='Passwords do not match.';return;}
+  const {error}=await sb.auth.updateUser({password:p});
+  if(error){$('rpErr').textContent=error.message;return;}
+  $('resetPanel').style.display='none';
+  alert('Password updated — you are now signed in.');
+  await afterLogin();
+}
 function showLogin(){ $('loginPanel').style.display='flex'; $('appRoot').style.display='none'; }
 async function afterLogin(){
   const {data:{user}}=await sb.auth.getUser(); ME=user;
@@ -623,6 +657,8 @@ function newInvoice(){
 }
 
 (async function init(){
+  sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY') showReset(); });
+  if(location.hash.includes('type=recovery')){ showReset(); return; }
   const {data:{session}}=await sb.auth.getSession();
   if(session){ await afterLogin(); } else { showLogin(); }
 })();
