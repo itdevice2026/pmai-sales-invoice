@@ -283,6 +283,18 @@
       <div style="font-size:11px;color:#666;margin:4px 0">Column: <code>description</code> (one per row; first row = header).</div>
       <input type="file" id="dbItemFile" accept=".csv,text/csv" onchange="importCsv(this,'items')">
     </div>
+    <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;background:#fffaf0">
+      <strong style="font-size:13px;color:var(--brand)">Invoice Numbers (booklet serials)</strong>
+      <div style="font-size:11px;color:#666;margin:4px 0">Only loaded numbers can be used in transactions. Load your pre-printed booklet range:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <label style="font-size:12px">From <input id="numFrom" type="number" value="501" style="width:90px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
+        <label style="font-size:12px">To <input id="numTo" type="number" value="1500" style="width:90px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
+        <label style="font-size:12px">Digits <input id="numWidth" type="number" value="5" style="width:60px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
+        <button class="primary" onclick="loadNumberRange(this)">Load range</button>
+      </div>
+      <div style="font-size:11px;color:#666;margin:6px 0 2px">…or upload a CSV of numbers (column: <code>number</code>):</div>
+      <input type="file" id="numFile" accept=".csv,text/csv" onchange="importCsv(this,'numbers')">
+    </div>
     <div id="dbMsg" style="font-size:12px;margin:6px 0"></div>
     <div id="dbBody" style="font-size:12.5px"></div>
     <button class="primary" onclick="closeDb()" style="margin-top:12px">Close</button>
@@ -423,6 +435,7 @@ async function afterLogin(){
   applyRoleUI();
   await loadCalib();
   await loadMasters();
+  await loadNumbers();
   await refreshList();
   newInvoice();
 }
@@ -812,9 +825,25 @@ async function saveMastersFromInvoice(d){
 function openDb(){
   if(!can.edit()){alert('Only Admin/Encoder can manage the database.');return;}
   $('dbPanel').style.display='flex'; $('dbMsg').textContent='';
-  $('dbBody').textContent='Customers: '+Object.keys(CUSTOMERS).length+' · Items: '+$('itemList').children.length;
+  dbCounts();
+}
+function dbCounts(){
+  const used=[...LOADED_NUMS].filter(n=>CACHE[n]).length;
+  $('dbBody').innerHTML='Customers: <strong>'+Object.keys(CUSTOMERS).length+'</strong> · Items: <strong>'+$('itemList').children.length+'</strong><br>Invoice numbers loaded: <strong>'+LOADED_NUMS.size+'</strong> · used: <strong>'+used+'</strong> · available: <strong>'+(LOADED_NUMS.size-used)+'</strong>';
 }
 function closeDb(){ $('dbPanel').style.display='none'; }
+async function loadNumberRange(btn){
+  const from=parseInt($('numFrom').value,10), to=parseInt($('numTo').value,10), w=parseInt($('numWidth').value,10)||5;
+  const m=$('dbMsg');
+  if(isNaN(from)||isNaN(to)||to<from){m.style.color='#a52a2a';m.textContent='Enter a valid From/To range.';return;}
+  if(to-from>5000){m.style.color='#a52a2a';m.textContent='Range too large (max 5000 at once).';return;}
+  if(btn){btn.disabled=true;btn.textContent='Loading…';}
+  const payload=[]; for(let i=from;i<=to;i++) payload.push({number:String(i).padStart(w,'0')});
+  const {error}=await sb.from('pmai_invoice_numbers').upsert(payload,{onConflict:'number',ignoreDuplicates:true});
+  if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;}
+  else { await loadNumbers(); m.style.color='#0b3d2e'; m.textContent='✓ Loaded '+payload.length+' numbers ('+payload[0].number+'–'+payload[payload.length-1].number+').'; dbCounts(); if(!$('invNo').value)newInvoice(); }
+  if(btn){btn.disabled=false;btn.textContent='Load range';}
+}
 function parseCsv(text){
   const rows=[]; let row=[],cur='',q=false;
   for(let i=0;i<text.length;i++){const ch=text[i];
@@ -840,6 +869,12 @@ async function importCsv(input,type){
       if(!payload.length){m.style.color='#a52a2a';m.textContent='No registered_name values found.';return;}
       const {error}=await sb.from('pmai_customers').upsert(payload,{onConflict:'registered_name'});
       if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;return;}
+    } else if(type==='numbers'){
+      const ni2=idx('number')>=0?idx('number'):0;
+      payload=[...new Set(rows.slice(1).map(r=>(r[ni2]||'').trim()).filter(Boolean))].map(x=>({number:x}));
+      if(!payload.length){m.style.color='#a52a2a';m.textContent='No numbers found.';return;}
+      const {error}=await sb.from('pmai_invoice_numbers').upsert(payload,{onConflict:'number',ignoreDuplicates:true});
+      if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;return;}
     } else {
       const di=idx('description')>=0?idx('description'):0;
       payload=[...new Set(rows.slice(1).map(r=>(r[di]||'').trim()).filter(Boolean))].map(x=>({description:x}));
@@ -847,9 +882,9 @@ async function importCsv(input,type){
       const {error}=await sb.from('pmai_items').upsert(payload,{onConflict:'description',ignoreDuplicates:true});
       if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;return;}
     }
-    await loadMasters();
+    await loadMasters(); await loadNumbers();
     m.style.color='#0b3d2e'; m.textContent='✓ Imported '+payload.length+' '+type+'.';
-    $('dbBody').textContent='Customers: '+Object.keys(CUSTOMERS).length+' · Items: '+$('itemList').children.length;
+    dbCounts();
     input.value='';
   }catch(e){ m.style.color='#a52a2a'; m.textContent='⚠ '+e; }
 }
@@ -957,15 +992,23 @@ async function refreshList(keep){
   });
   if(keep)sel.value=keep;
 }
+let LOADED_NUMS=new Set();
+async function loadNumbers(){
+  const {data}=await sb.from('pmai_invoice_numbers').select('number');
+  LOADED_NUMS=new Set((data||[]).map(r=>String(r.number)));
+}
 function nextNumber(){
-  const nums=Object.keys(CACHE).map(n=>parseInt(n,10)).filter(n=>!isNaN(n));
-  const max=nums.length?Math.max(...nums):750;
-  return String(max+1).padStart(5,'0');
+  const avail=[...LOADED_NUMS].filter(n=>!CACHE[n]).sort((a,b)=>(parseInt(a,10)||0)-(parseInt(b,10)||0));
+  return avail.length?avail[0]:'';
 }
 async function saveInvoice(){
   if(!can.edit()){alert('You do not have permission to save.');return;}
   const d=gather();
   if(!d.invoice_no){alert('Please enter an Invoice No. before saving.');return;}
+  if(!LOADED_NUMS.has(d.invoice_no) && !CACHE[d.invoice_no]){
+    alert('Invoice No. '+d.invoice_no+' is not loaded into the system.\nOnly loaded booklet numbers can be used. An admin must load it first (📇 Database → Invoice Numbers).');
+    return;
+  }
   setStatus('Saving…');
   const {error}=await sb.from('pmai_invoices').upsert(d,{onConflict:'invoice_no'});
   if(error){setStatus('⚠ '+error.message);alert('Save failed: '+error.message);return;}
@@ -986,9 +1029,11 @@ async function deleteCurrent(){
 }
 function newInvoice(){
   apply({});
-  $('invNo').value=nextNumber();
+  const n=nextNumber();
+  $('invNo').value=n;
   $('invDate').value=new Date().toISOString().slice(0,10);
-  $('savedList').value=''; setStatus('New invoice');
+  $('savedList').value='';
+  setStatus(n?'New invoice':'⚠ No invoice numbers available — load booklet numbers in 📇 Database → Invoice Numbers');
 }
 
 (async function init(){
