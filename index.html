@@ -291,14 +291,29 @@
         <label style="font-size:12px">From <input id="numFrom" type="number" value="1501" style="width:84px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
         <label style="font-size:12px">To <input id="numTo" type="number" value="1550" style="width:84px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
         <label style="font-size:12px">Digits <input id="numWidth" type="number" value="5" style="width:54px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
-        <label style="font-size:12px">Assign to <select id="bkAssign" style="padding:6px;border:1px solid #c4ccd4;border-radius:6px"><option value="">Anyone</option></select></label>
         <button class="primary" onclick="addBooklet(this)">Add booklet</button>
       </div>
+      <div style="font-size:12px;color:#444;margin-top:8px">Who can use it — tick users (none ticked = Anyone):</div>
+      <div id="bkAssignList" style="display:flex;flex-wrap:wrap;gap:12px;max-height:96px;overflow:auto;border:1px solid #eee;border-radius:6px;padding:8px;margin-top:4px"></div>
       <div id="bkBody" style="font-size:12px;margin-top:10px">Loading…</div>
     </div>
     <div id="dbMsg" style="font-size:12px;margin:6px 0"></div>
     <div id="dbBody" style="font-size:12.5px"></div>
     <button class="primary" onclick="closeDb()" style="margin-top:12px">Close</button>
+  </div>
+</div>
+
+<!-- BOOKLET ACCESS -->
+<div class="modal" id="accessModal">
+  <div class="card" style="width:420px;max-height:80vh;overflow:auto">
+    <h2>Who can use this booklet</h2>
+    <p id="accLabel" style="font-weight:700;color:var(--brand)"></p>
+    <p>Tick the users allowed to use these invoice numbers. None ticked = anyone.</p>
+    <div id="accBody" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="primary" onclick="saveAccess()">Save access</button>
+      <button onclick="document.getElementById('accessModal').style.display='none'">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -835,14 +850,18 @@ function dbCounts(){
   $('dbBody').innerHTML='Customers: <strong>'+Object.keys(CUSTOMERS).length+'</strong> · Items: <strong>'+$('itemList').children.length+'</strong><br>Invoice numbers loaded: <strong>'+LOADED_NUMS.size+'</strong> · used: <strong>'+used+'</strong> · available: <strong>'+(LOADED_NUMS.size-used)+'</strong>';
 }
 function closeDb(){ $('dbPanel').style.display='none'; }
-let DB_USERS=[];
+let DB_USERS=[], BK_GROUPS={};
+function userName(uid){ const u=DB_USERS.find(x=>x.user_id===uid); return u?(u.full_name||u.email||uid):uid; }
+function userChecklistHtml(prefix, selSet){
+  if(!DB_USERS.length) return '<span style="color:#a52a2a">No users found.</span>';
+  return DB_USERS.map(u=>`<label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="${prefix}${u.user_id}"${selSet&&selSet.has(u.user_id)?' checked':''}> ${(u.full_name||u.email||u.user_id).replace(/</g,'&lt;')}</label>`).join('');
+}
+function checkedUids(prefix){ return DB_USERS.filter(u=>{const e=$(prefix+u.user_id);return e&&e.checked;}).map(u=>u.user_id); }
 async function loadDbUsers(){
   const {data}=await sb.from('pmai_user_roles').select('user_id,email,full_name').order('email');
   DB_USERS=data||[];
-  const opt='<option value="">Anyone</option>'+DB_USERS.map(u=>`<option value="${u.user_id}">${(u.full_name||u.email||u.user_id).replace(/</g,'&lt;')}</option>`).join('');
-  if($('bkAssign')) $('bkAssign').innerHTML=opt;
+  if($('bkAssignList')) $('bkAssignList').innerHTML=userChecklistHtml('bka_',null);
 }
-function userOpts(sel){ return '<option value="">Anyone</option>'+DB_USERS.map(u=>`<option value="${u.user_id}"${sel===u.user_id?' selected':''}>${(u.full_name||u.email||u.user_id).replace(/</g,'&lt;')}</option>`).join(''); }
 async function addBooklet(btn){
   const label=$('bkLabel').value.trim();
   const from=parseInt($('numFrom').value,10), to=parseInt($('numTo').value,10), w=parseInt($('numWidth').value,10)||5;
@@ -850,40 +869,54 @@ async function addBooklet(btn){
   if(!label){m.style.color='#a52a2a';m.textContent='Enter a booklet label.';return;}
   if(isNaN(from)||isNaN(to)||to<from){m.style.color='#a52a2a';m.textContent='Enter a valid From/To range.';return;}
   if(to-from>5000){m.style.color='#a52a2a';m.textContent='Range too large (max 5000 at once).';return;}
-  const uid=$('bkAssign').value||null;
-  const email=uid?((DB_USERS.find(u=>u.user_id===uid)||{}).email||null):null;
+  const uids=checkedUids('bka_');
+  const emails=uids.map(id=>(DB_USERS.find(u=>u.user_id===id)||{}).email||'');
   if(btn){btn.disabled=true;btn.textContent='Adding…';}
-  const payload=[]; for(let i=from;i<=to;i++) payload.push({number:String(i).padStart(w,'0'),booklet:label,assigned_to:uid,assigned_email:email});
+  const payload=[]; for(let i=from;i<=to;i++) payload.push({number:String(i).padStart(w,'0'),booklet:label,assignees:uids.length?uids:null,assignee_emails:uids.length?emails:null});
   const {error}=await sb.from('pmai_invoice_numbers').upsert(payload,{onConflict:'number'});
   if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;}
-  else { await loadNumbers(); m.style.color='#0b3d2e'; m.textContent='✓ Booklet "'+label+'" added ('+payload.length+' numbers'+(email?', assigned to '+email:'')+').'; $('bkLabel').value=''; renderBooklets(); dbCounts(); if(!$('invNo').value)newInvoice(); }
+  else { await loadNumbers(); m.style.color='#0b3d2e'; m.textContent='✓ Booklet "'+label+'" added ('+payload.length+' numbers'+(uids.length?', for '+emails.join(', '):' — Anyone')+').'; $('bkLabel').value=''; await loadDbUsers(); renderBooklets(); dbCounts(); if(!$('invNo').value)newInvoice(); }
   if(btn){btn.disabled=false;btn.textContent='Add booklet';}
 }
 function renderBooklets(){
-  const g={};
-  NUM_ROWS.forEach(r=>{ const k=r.booklet||'(unassigned)'; g[k]=g[k]||{count:0,used:0,nums:[],uid:r.assigned_to||''}; g[k].count++; if(CACHE[String(r.number)])g[k].used++; g[k].nums.push(parseInt(r.number,10)||0); });
+  const g={}; BK_GROUPS=g;
+  NUM_ROWS.forEach(r=>{ const k=r.booklet||'(unassigned)'; g[k]=g[k]||{count:0,used:0,nums:[],uids:Array.isArray(r.assignees)?r.assignees:[]}; g[k].count++; if(CACHE[String(r.number)])g[k].used++; g[k].nums.push(parseInt(r.number,10)||0); });
   const keys=Object.keys(g).sort();
   if(!keys.length){ if($('bkBody'))$('bkBody').textContent='No booklets yet — add one above.'; return; }
-  let h='<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;border-bottom:1px solid #ddd;padding:4px">Booklet</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:4px">Range</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:4px">Assigned to</th><th style="border-bottom:1px solid #ddd;padding:4px">Used/Total</th><th style="border-bottom:1px solid #ddd;padding:4px"></th></tr>';
+  let h='<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;border-bottom:1px solid #ddd;padding:4px">Booklet</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:4px">Range</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:4px">Who can use</th><th style="border-bottom:1px solid #ddd;padding:4px">Used/Total</th><th style="border-bottom:1px solid #ddd;padding:4px"></th></tr>';
   keys.forEach(k=>{
     const b=g[k]; const mn=Math.min(...b.nums),mx=Math.max(...b.nums);
     const lab=k.replace(/'/g,"\\'");
     const isU=(k==='(unassigned)');
+    const who=b.uids&&b.uids.length?b.uids.map(userName).join(', ').replace(/</g,'&lt;'):'<span style="color:#888">Anyone</span>';
     h+='<tr><td style="padding:4px;border-bottom:1px solid #f0f0f0">'+k.replace(/</g,'&lt;')+'</td>'
       +'<td style="padding:4px;border-bottom:1px solid #f0f0f0">'+String(mn).padStart(5,'0')+'–'+String(mx).padStart(5,'0')+'</td>'
-      +'<td style="padding:4px;border-bottom:1px solid #f0f0f0">'+(isU?'<span style="color:#888">Anyone</span>':'<select onchange="reassignBooklet(\''+lab+'\',this.value)">'+userOpts(b.uid)+'</select>')+'</td>'
+      +'<td style="padding:4px;border-bottom:1px solid #f0f0f0">'+who+'</td>'
       +'<td style="padding:4px;border-bottom:1px solid #f0f0f0;text-align:center">'+b.used+'/'+b.count+'</td>'
-      +'<td style="padding:4px;border-bottom:1px solid #f0f0f0;text-align:center">'+(isU?'':'<button onclick="deleteBooklet(\''+lab+'\')">Delete</button>')+'</td></tr>';
+      +'<td style="padding:4px;border-bottom:1px solid #f0f0f0;text-align:center;white-space:nowrap">'+(isU?'':'<button onclick="openAccess(\''+lab+'\')">Edit access</button> <button onclick="deleteBooklet(\''+lab+'\')">Delete</button>')+'</td></tr>';
   });
   h+='</table>';
   if($('bkBody'))$('bkBody').innerHTML=h;
 }
-async function reassignBooklet(label,uid){
-  const email=uid?((DB_USERS.find(u=>u.user_id===uid)||{}).email||null):null;
-  const {error}=await sb.from('pmai_invoice_numbers').update({assigned_to:uid||null,assigned_email:email}).eq('booklet',label);
+let _accLabel='';
+function openAccess(label){
+  _accLabel=label;
+  const sel=new Set((BK_GROUPS[label]&&BK_GROUPS[label].uids)||[]);
+  $('accLabel').textContent=label;
+  $('accBody').innerHTML=userChecklistHtml('acc_',sel);
+  $('accessModal').style.display='flex';
+}
+async function saveAccess(){
+  const uids=checkedUids('acc_');
+  await reassignBooklet(_accLabel, uids);
+  $('accessModal').style.display='none';
+}
+async function reassignBooklet(label,uids){
+  const emails=uids.map(id=>(DB_USERS.find(u=>u.user_id===id)||{}).email||'');
+  const {error}=await sb.from('pmai_invoice_numbers').update({assignees:uids.length?uids:null,assignee_emails:uids.length?emails:null}).eq('booklet',label);
   const m=$('dbMsg');
   if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;return;}
-  await loadNumbers(); renderBooklets(); m.style.color='#0b3d2e'; m.textContent='✓ Reassigned "'+label+'"'+(email?' to '+email:' to Anyone')+'.';
+  await loadNumbers(); renderBooklets(); m.style.color='#0b3d2e'; m.textContent='✓ Updated access for "'+label+'"'+(uids.length?' ('+emails.join(', ')+')':' (Anyone)')+'.';
 }
 async function deleteBooklet(label){
   if(!confirm('Delete booklet "'+label+'" and its loaded numbers? Saved invoices are not affected.'))return;
@@ -1042,14 +1075,14 @@ async function refreshList(keep){
 }
 let LOADED_NUMS=new Set(), NUM_ASSIGN={}, NUM_ROWS=[];
 async function loadNumbers(){
-  const {data}=await sb.from('pmai_invoice_numbers').select('number,booklet,assigned_to,assigned_email');
+  const {data}=await sb.from('pmai_invoice_numbers').select('number,booklet,assignees,assignee_emails');
   NUM_ROWS=data||[];
   LOADED_NUMS=new Set(NUM_ROWS.map(r=>String(r.number)));
-  NUM_ASSIGN={}; NUM_ROWS.forEach(r=>{ NUM_ASSIGN[String(r.number)]=r.assigned_to||null; });
+  NUM_ASSIGN={}; NUM_ROWS.forEach(r=>{ NUM_ASSIGN[String(r.number)]=Array.isArray(r.assignees)?r.assignees:null; });
 }
+function numUsable(n){ const a=NUM_ASSIGN[n]; return !a||!a.length||(ME&&a.includes(ME.id)); }
 function nextNumber(){
-  const me=ME?ME.id:null;
-  const avail=[...LOADED_NUMS].filter(n=>!CACHE[n] && (!NUM_ASSIGN[n]||NUM_ASSIGN[n]===me)).sort((a,b)=>(parseInt(a,10)||0)-(parseInt(b,10)||0));
+  const avail=[...LOADED_NUMS].filter(n=>!CACHE[n] && numUsable(n)).sort((a,b)=>(parseInt(a,10)||0)-(parseInt(b,10)||0));
   return avail.length?avail[0]:'';
 }
 async function saveInvoice(){
@@ -1061,9 +1094,8 @@ async function saveInvoice(){
       alert('Invoice No. '+d.invoice_no+' is not loaded into the system.\nOnly loaded booklet numbers can be used. An admin must add the booklet first (📇 Database → Booklets).');
       return;
     }
-    const asg=NUM_ASSIGN[d.invoice_no];
-    if(asg && ME && asg!==ME.id){
-      alert('Invoice No. '+d.invoice_no+' belongs to a booklet assigned to another user. Use a number from a booklet assigned to you.');
+    if(!numUsable(d.invoice_no)){
+      alert('Invoice No. '+d.invoice_no+' belongs to a booklet assigned to other user(s). Use a number from a booklet assigned to you.');
       return;
     }
   }
