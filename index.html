@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMAI Sales Invoice System</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#666;--accent:#c0392b;--bg:#eef1f4;--panel:#fff;--brand:#0b3d2e;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Arial,Helvetica,sans-serif;font-size:14px;}
+  .app{max-width:1100px;margin:0 auto;padding:16px;}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);border:1px solid #d7dde3;border-radius:10px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .toolbar h1{font-size:15px;margin:0 auto 0 0;color:var(--brand);font-weight:700;}
+  button{font-family:inherit;font-size:13px;cursor:pointer;border-radius:7px;border:1px solid #c4ccd4;background:#fff;padding:8px 12px;transition:.15s;}
+  button:hover{background:#f0f3f6;}
+  button.primary{background:var(--brand);border-color:var(--brand);color:#fff;}
+  button.primary:hover{background:#0e5740;}
+  button.danger{color:#a52a2a;border-color:#e0b4b4;}
+  button.danger:hover{background:#fbeaea;}
+  .toolbar select{font-family:inherit;font-size:13px;padding:7px 8px;border-radius:7px;border:1px solid #c4ccd4;background:#fff;max-width:300px;}
+  .opt{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);}
+  #status{font-size:12px;color:var(--muted);margin-left:4px;}
+  .calbar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:#fbfdff;border:1px dashed #c4ccd4;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--muted);}
+  .calbar label{display:flex;align-items:center;gap:5px;}
+  .calbar input[type=number]{width:62px;padding:5px 6px;border:1px solid #c4ccd4;border-radius:6px;font-family:inherit;font-size:12px;}
+  .sheet{background:var(--panel);border:1px solid #000;padding:26px 30px 22px;box-shadow:0 2px 10px rgba(0,0,0,.1);}
+  .head{text-align:center;}
+  .head .co{font-size:24px;font-weight:800;letter-spacing:.5px;}
+  .head .tin,.head .addr{font-size:13px;margin-top:1px;}
+  .titlebar{display:flex;align-items:flex-end;justify-content:space-between;margin-top:18px;}
+  .titlebar .lbl{font-size:22px;font-weight:800;letter-spacing:.5px;}
+  .paytype{display:flex;gap:18px;margin-top:6px;font-weight:700;font-size:13px;}
+  .paytype label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+  .nobox{display:flex;align-items:center;gap:8px;}
+  .nobox .nolabel{font-weight:800;font-size:18px;}
+  .noinput{font-size:22px;font-weight:800;color:var(--accent);border:1px solid #000;width:150px;padding:3px 8px;text-align:center;letter-spacing:1px;}
+  .datebox{display:flex;border:1px solid #000;margin-top:8px;}
+  .datebox .dl{background:#f0f0f0;font-weight:700;padding:5px 10px;border-right:1px solid #000;}
+  .datebox input{border:0;padding:5px 8px;font-family:inherit;font-size:13px;width:150px;}
+  table{border-collapse:collapse;width:100%;}
+  .soldto{margin-top:14px;border:1px solid #000;}
+  .soldto .stitle{font-weight:800;padding:5px 8px;border-bottom:1px solid #000;}
+  .soldto td{border:1px solid #000;padding:0;}
+  .soldto .k{font-weight:700;padding:6px 8px;width:160px;text-align:right;border-right:1px solid #000;}
+  .soldto input{border:0;width:100%;padding:6px 8px;font-family:inherit;font-size:13px;}
+  .items{margin-top:12px;border:1px solid #000;table-layout:fixed;}
+  .items th{border:1px solid #000;padding:6px;font-size:12.5px;text-align:center;line-height:1.15;}
+  .items td{border:1px solid #000;padding:0;}
+  .items col.desc{width:46%;}.items col.qty{width:12%;}.items col.price{width:16%;}.items col.amt{width:18%;}.items col.vat{width:14%;}
+  .items input,.items select{border:0;width:100%;padding:6px;font-family:inherit;font-size:13px;background:transparent;}
+  .items input.num{text-align:right;}
+  .items td.amtcell{text-align:right;padding:6px;font-variant-numeric:tabular-nums;}
+  .rowdel{border:0;background:transparent;color:#a52a2a;font-size:15px;padding:2px 6px;line-height:1;cursor:pointer;}
+  .additem{margin-top:8px;}
+  .lower{display:flex;margin-top:14px;}
+  .lower .left{flex:1;border:1px solid #000;border-right:0;}
+  .lower .right{width:46%;border:1px solid #000;}
+  .lower table{height:100%;}
+  .lower td{border:1px solid #000;padding:5px 8px;font-size:13px;}
+  .lower .left td.k{font-weight:700;width:55%;}
+  .lower .left input{border:0;width:100%;font-family:inherit;font-size:13px;}
+  .lower .right td.k{font-weight:700;text-align:right;width:58%;}
+  .lower .right td.v{text-align:right;font-variant-numeric:tabular-nums;width:42%;}
+  .lower .right input{border:0;width:100%;text-align:right;font-family:inherit;font-size:13px;}
+  .lower .right tr.total td{font-weight:800;background:#f0f0f0;}
+  .small{font-size:11px;color:var(--muted);font-weight:400;}
+  .received{margin-top:14px;font-size:13px;}
+  .received .line{border-bottom:1px solid #000;display:inline-block;min-width:60%;}
+  .sign{display:flex;justify-content:space-between;margin-top:26px;gap:30px;}
+  .sign .by{font-size:13px;}
+  .sign .rep{text-align:center;flex:1;}
+  .sign .rep .sigline{border-top:1px solid #000;padding-top:3px;font-weight:700;}
+  .footnote{margin-top:18px;font-size:9px;color:#555;line-height:1.4;border-top:1px solid #ccc;padding-top:6px;}
+  .hint{font-size:11px;color:var(--muted);margin:4px 2px 0;}
+
+  /* ---------- Pre-printed overlay ---------- */
+  #printRoot{display:none;}
+  #overlay{position:relative;width:165mm;height:200mm;
+    transform:translate(var(--ox,0mm),var(--oy,0mm));}
+  #overlay .f{position:absolute;font-family:Arial,Helvetica,sans-serif;font-size:9pt;color:#000;white-space:nowrap;}
+  #overlay .r{text-align:right;}
+  #overlay .b{font-weight:700;}
+  body.preview .app{display:none;}
+  body.preview #printRoot{display:block;background:#fff;padding:0;}
+  body.preview #overlay{outline:1px dashed #c00;background:repeating-linear-gradient(#f5f5f5 0 0) padding-box;}
+  body.preview #overlay::before{content:"PRE-PRINTED FORM PREVIEW (165 × 200 mm) — values only";position:absolute;top:-7mm;left:0;font-size:8pt;color:#c00;}
+
+  @media print{
+    .app{display:none !important;}
+    #printRoot{display:block !important;}
+    html,body{background:#fff;margin:0;}
+    @page{size:165mm 200mm;margin:0;}
+    #overlay{outline:none;}
+    #overlay::before{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toolbar no-print">
+    <h1>PMAI Sales Invoice System</h1>
+    <button class="primary" onclick="newInvoice()">＋ New</button>
+    <button class="primary" onclick="saveInvoice()">💾 Save</button>
+    <select id="savedList" onchange="loadSelected()" title="Saved invoices"><option value="">— Loading… —</option></select>
+    <button onclick="doPrint()">🖨 Print on form</button>
+    <button onclick="togglePreview()" id="prevBtn">👁 Preview overlay</button>
+    <button class="danger" onclick="deleteCurrent()">🗑 Delete</button>
+    <label class="opt"><input type="checkbox" id="vatInclusive" checked onchange="recalc()"> Prices VAT-inclusive</label>
+    <span id="status"></span>
+  </div>
+  <div class="calbar no-print">
+    <strong style="color:var(--brand)">Print alignment</strong>
+    <label>Shift right (mm) <input type="number" id="offX" step="0.5" value="0" onchange="saveCal()"></label>
+    <label>Shift down (mm) <input type="number" id="offY" step="0.5" value="0" onchange="saveCal()"></label>
+    <button onclick="testPrint()">🧭 Print alignment test</button>
+    <span>Tip: print one form, see how far the text is off, then nudge these and reprint.</span>
+  </div>
+  <div class="hint no-print">Invoices are stored in the cloud and shared by everyone who opens this link. Enter data below; totals compute automatically. <strong>“Print on form”</strong> prints ONLY the typed values, positioned to land on your pre-printed booklet (the letterhead, lines and footer are already on the paper). Use <strong>“Preview overlay”</strong> to see just those values on a blank 165×200 mm sheet.</div>
+
+  <div class="sheet" id="sheet">
+    <div class="head">
+      <div class="co">PACIFIC MAGALANG AGRIVENTURES INC.</div>
+      <div class="tin">VAT Reg. TIN: 653-348-264-00000</div>
+      <div class="addr">2F CB Building, Don Andres Luciano, Santa Cruz 2011, Magalang, Pampanga, Philippines</div>
+    </div>
+    <div class="titlebar">
+      <div>
+        <div class="lbl">SALES INVOICE</div>
+        <div class="paytype">
+          <label><input type="checkbox" id="cash"> CASH</label>
+          <label><input type="checkbox" id="charge"> CHARGE</label>
+        </div>
+      </div>
+      <div>
+        <div class="nobox"><span class="nolabel">No.:</span><input class="noinput" id="invNo"></div>
+        <div class="datebox"><span class="dl">Date</span><input type="date" id="invDate"></div>
+      </div>
+    </div>
+    <table class="soldto">
+      <tr><td class="stitle" colspan="2">SOLD TO:</td></tr>
+      <tr><td class="k">Registered Name</td><td><input id="custName"></td></tr>
+      <tr><td class="k">TIN</td><td><div style="display:flex"><input id="custTIN" style="flex:1"><span style="border-left:1px solid #000;padding:6px 8px;font-weight:700;white-space:nowrap">Terms:</span><input id="terms" style="flex:1"></div></td></tr>
+      <tr><td class="k">Business Address</td><td><input id="custAddr"></td></tr>
+    </table>
+    <table class="items">
+      <colgroup><col class="desc"><col class="qty"><col class="price"><col class="amt"><col class="vat"></colgroup>
+      <thead><tr><th>Item Description / Nature of Service</th><th>Quantity</th><th>Unit Cost / Price</th><th>Amount</th><th>VAT Type</th></tr></thead>
+      <tbody id="itemBody"></tbody>
+    </table>
+    <button class="additem no-print" onclick="addRow()">＋ Add line item</button>
+    <div class="lower">
+      <div class="left"><table>
+        <tr><td class="k">VATable Sales</td><td class="v" id="o_vatable">0.00</td></tr>
+        <tr><td class="k">VAT</td><td class="v" id="o_vat">0.00</td></tr>
+        <tr><td class="k">Zero Rated Sales</td><td class="v" id="o_zero">0.00</td></tr>
+        <tr><td class="k">VAT - Exempt Sales</td><td class="v" id="o_exempt">0.00</td></tr>
+        <tr><td class="k">BANK:</td><td><input id="bank"></td></tr>
+        <tr><td class="k">Acct No.:</td><td><input id="acct"></td></tr>
+        <tr><td class="k">Check No.:</td><td><input id="check"></td></tr>
+      </table></div>
+      <div class="right"><table>
+        <tr><td class="k">Total Sales (VAT Inclusive)</td><td class="v" id="t_total">0.00</td></tr>
+        <tr><td class="k">Less: VAT</td><td class="v" id="t_lessvat">0.00</td></tr>
+        <tr><td class="k">Amount: Net of VAT</td><td class="v" id="t_net">0.00</td></tr>
+        <tr><td class="k">Less: Discount <span class="small">(SC/PWD/NAAC/MOV/SP)</span></td><td class="v"><input id="discount" class="num" value="0" oninput="recalc()"></td></tr>
+        <tr><td class="k">Less: Withholding Tax</td><td class="v"><input id="wht" class="num" value="0" oninput="recalc()"></td></tr>
+        <tr><td class="k">Add: VAT</td><td class="v" id="t_addvat">0.00</td></tr>
+        <tr class="total"><td class="k">Total Amount Due</td><td class="v" id="t_due">0.00</td></tr>
+      </table></div>
+    </div>
+    <div class="received">Received the amount of: <span class="line" id="amtWords">&nbsp;</span></div>
+    <div class="sign">
+      <div class="by">By: ____________________________</div>
+      <div class="rep"><div class="sigline">Authorized Representative</div></div>
+    </div>
+    <div class="footnote">
+      SC/PWD/NAAC/MOV/Solo Parent ID No. ____________________ &nbsp;&nbsp; Signature ____________________<br>
+      20 Bklts. (50 x 4) 00501 - 01500 BIR ATP No.: OCN: 21AAU2026000000408 Date of ATP: Jan. 14, 2026.
+      Patricia Printing Services Tel. 8815/5074/09452472922. Printers Accreditation: 047MP202300000000. Date: Nov. 16, 2023 Expiry Date: Nov. 15, 2028.
+    </div>
+  </div>
+</div>
+
+<div id="printRoot"><div id="overlay"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://emkcwukiqxnvcbhkjiqz.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVta2N3dWtpcXhudmNiaGtqaXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTk5NzksImV4cCI6MjA5NjQ3NTk3OX0.93Ark2Jb8s-kfVO0_T_SMjA6CXWFel6fLNHzrt9Pejk";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let CACHE = {};
+
+const peso = n => (isFinite(n)?n:0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const $ = id => document.getElementById(id);
+function setStatus(m){ $('status').textContent = m||''; }
+
+const MAP = {
+  date:{x:120,y:17.5},
+  cash:{x:27,y:18.2}, charge:{x:52,y:18.2},
+  custName:{x:41,y:29}, custTIN:{x:41,y:35.5}, terms:{x:112,y:35.5}, custAddr:{x:41,y:41.5},
+  itemsTop:71, rowH:5.6, maxRows:9,
+  col:{desc:11, qty:99, price:121, amt:154},
+  leftValX:77,
+  bankX:30,
+  left:{vatable:124.5, vat:130.2, zero:135.9, exempt:141.6, bank:147.6, acct:153.6, check:159.6},
+  rightValX:154,
+  right:{total:124.5, lessvat:130.2, net:135.9, discount:141.6, wht:147.6, addvat:153.6, due:159.6},
+  words:{x:43,y:169.5},
+};
+
+function addRow(data){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+    <td><input class="desc"></td>
+    <td><input class="num qty" oninput="recalc()"></td>
+    <td><input class="num price" oninput="recalc()"></td>
+    <td class="amtcell amt">0.00</td>
+    <td><select class="vat" onchange="recalc()">
+      <option value="vatable">VATable</option>
+      <option value="zero">Zero-Rated</option>
+      <option value="exempt">VAT-Exempt</option></select>
+      <button class="rowdel no-print" title="Remove" onclick="this.closest('tr').remove();recalc()">✕</button></td>`;
+  $('itemBody').appendChild(tr);
+  if(data){
+    tr.querySelector('.desc').value=data.desc||'';
+    tr.querySelector('.qty').value=data.qty||'';
+    tr.querySelector('.price').value=data.price||'';
+    tr.querySelector('.vat').value=data.vat||'vatable';
+  }
+  recalc();
+}
+
+function recalc(){
+  const inclusive=$('vatInclusive').checked;
+  let gV=0,zero=0,exempt=0;
+  document.querySelectorAll('#itemBody tr').forEach(tr=>{
+    const q=parseFloat(tr.querySelector('.qty').value)||0;
+    const p=parseFloat(tr.querySelector('.price').value)||0;
+    const amt=q*p; tr.querySelector('.amt').textContent=peso(amt);
+    const t=tr.querySelector('.vat').value;
+    if(t==='zero')zero+=amt; else if(t==='exempt')exempt+=amt; else gV+=amt;
+  });
+  let vatableSales,vat;
+  if(inclusive){vatableSales=gV/1.12;vat=gV-vatableSales;} else {vatableSales=gV;vat=gV*0.12;}
+  const total=inclusive?(gV+zero+exempt):(gV+vat+zero+exempt);
+  const net=total-vat;
+  const discount=parseFloat($('discount').value)||0;
+  const wht=parseFloat($('wht').value)||0;
+  const due=net-discount-wht+vat;
+  $('o_vatable').textContent=peso(vatableSales);
+  $('o_vat').textContent=peso(vat);
+  $('o_zero').textContent=peso(zero);
+  $('o_exempt').textContent=peso(exempt);
+  $('t_total').textContent=peso(total);
+  $('t_lessvat').textContent=peso(vat);
+  $('t_net').textContent=peso(net);
+  $('t_addvat').textContent=peso(vat);
+  $('t_due').textContent=peso(due);
+  $('amtWords').textContent=inWords(due);
+}
+
+function inWords(num){
+  num=Math.round((num+Number.EPSILON)*100)/100;
+  if(num<=0)return ' ';
+  const pesos=Math.floor(num),cents=Math.round((num-pesos)*100);
+  const ones=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+  const tens=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+  function b(n){let s='';if(n>=100){s+=ones[Math.floor(n/100)]+' hundred ';n%=100;}if(n>=20){s+=tens[Math.floor(n/10)]+' ';n%=10;}if(n>0)s+=ones[n]+' ';return s;}
+  function conv(n){if(n===0)return 'zero';const sc=['','thousand','million','billion'];let s='',g=0;while(n>0){const p=n%1000;if(p)s=b(p)+sc[g]+' '+s;n=Math.floor(n/1000);g++;}return s.trim();}
+  let w=conv(pesos).replace(/\s+/g,' ').trim();
+  w=w.charAt(0).toUpperCase()+w.slice(1)+' pesos';
+  if(cents>0)w+=' and '+cents+'/100';
+  return w+' only';
+}
+
+function fld(x,y,text,cls){
+  if(text===''||text==null)return '';
+  return `<span class="f ${cls||''}" style="left:${x}mm;top:${y}mm">${String(text).replace(/</g,'&lt;')}</span>`;
+}
+function fldR(xRight,y,text,cls){
+  if(text===''||text==null)return '';
+  return `<span class="f r ${cls||''}" style="right:${165-xRight}mm;top:${y}mm">${String(text).replace(/</g,'&lt;')}</span>`;
+}
+function buildOverlay(){
+  const m=MAP; let h='';
+  const dt=$('invDate').value;
+  if(dt){const d=new Date(dt+'T00:00:00');h+=fld(m.date.x,m.date.y,d.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}));}
+  if($('cash').checked)h+=fld(m.cash.x,m.cash.y,'X','b');
+  if($('charge').checked)h+=fld(m.charge.x,m.charge.y,'X','b');
+  h+=fld(m.custName.x,m.custName.y,$('custName').value);
+  h+=fld(m.custTIN.x,m.custTIN.y,$('custTIN').value);
+  h+=fld(m.terms.x,m.terms.y,$('terms').value);
+  h+=fld(m.custAddr.x,m.custAddr.y,$('custAddr').value);
+  let i=0;
+  document.querySelectorAll('#itemBody tr').forEach(tr=>{
+    if(i>=m.maxRows)return;
+    const desc=tr.querySelector('.desc').value;
+    const q=tr.querySelector('.qty').value;
+    const p=tr.querySelector('.price').value;
+    if(!desc&&!q&&!p)return;
+    const y=m.itemsTop+i*m.rowH;
+    h+=fld(m.col.desc,y,desc);
+    if(q!=='')h+=fldR(m.col.qty,y,q);
+    if(p!=='')h+=fldR(m.col.price,y,peso(parseFloat(p)||0));
+    const amt=(parseFloat(q)||0)*(parseFloat(p)||0);
+    if(amt)h+=fldR(m.col.amt,y,peso(amt));
+    i++;
+  });
+  h+=fldR(m.leftValX,m.left.vatable,$('o_vatable').textContent);
+  h+=fldR(m.leftValX,m.left.vat,$('o_vat').textContent);
+  h+=fldR(m.leftValX,m.left.zero,$('o_zero').textContent);
+  h+=fldR(m.leftValX,m.left.exempt,$('o_exempt').textContent);
+  h+=fld(m.bankX,m.left.bank,$('bank').value);
+  h+=fld(m.bankX,m.left.acct,$('acct').value);
+  h+=fld(m.bankX,m.left.check,$('check').value);
+  h+=fldR(m.rightValX,m.right.total,$('t_total').textContent);
+  h+=fldR(m.rightValX,m.right.lessvat,$('t_lessvat').textContent);
+  h+=fldR(m.rightValX,m.right.net,$('t_net').textContent);
+  const disc=parseFloat($('discount').value)||0, wht=parseFloat($('wht').value)||0;
+  if(disc)h+=fldR(m.rightValX,m.right.discount,peso(disc));
+  if(wht)h+=fldR(m.rightValX,m.right.wht,peso(wht));
+  h+=fldR(m.rightValX,m.right.addvat,$('t_addvat').textContent);
+  h+=fldR(m.rightValX,m.right.due,$('t_due').textContent,'b');
+  h+=fld(m.words.x,m.words.y,$('amtWords').textContent);
+  $('overlay').innerHTML=h;
+}
+
+function applyCal(){
+  const ox=parseFloat($('offX').value)||0, oy=parseFloat($('offY').value)||0;
+  $('overlay').style.setProperty('--ox',ox+'mm');
+  $('overlay').style.setProperty('--oy',oy+'mm');
+}
+function saveCal(){
+  applyCal();
+  try{localStorage.setItem('pmai_cal',JSON.stringify({x:$('offX').value,y:$('offY').value}));}catch(e){}
+}
+function loadCal(){
+  try{const c=JSON.parse(localStorage.getItem('pmai_cal'));if(c){$('offX').value=c.x;$('offY').value=c.y;}}catch(e){}
+  applyCal();
+}
+function doPrint(){ buildOverlay(); applyCal(); window.print(); }
+function togglePreview(){
+  if(!document.body.classList.contains('preview')){buildOverlay();applyCal();}
+  document.body.classList.toggle('preview');
+  $('prevBtn').textContent=document.body.classList.contains('preview')?'✏ Back to form':'👁 Preview overlay';
+}
+function testPrint(){
+  let h='';
+  for(let mm=0;mm<=165;mm+=10)h+=`<span class="f" style="left:${mm}mm;top:1mm;font-size:6pt">${mm}</span><div style="position:absolute;left:${mm}mm;top:4mm;width:0;border-left:1px solid #000;height:${mm%50===0?6:3}mm"></div>`;
+  for(let mm=0;mm<=200;mm+=10)h+=`<span class="f" style="left:1mm;top:${mm}mm;font-size:6pt">${mm}</span><div style="position:absolute;top:${mm}mm;left:4mm;height:0;border-top:1px solid #000;width:${mm%50===0?6:3}mm"></div>`;
+  $('overlay').innerHTML=h; applyCal(); window.print();
+}
+
+function gatherTotals(){return {total:$('t_total').textContent,vat:$('o_vat').textContent,net:$('t_net').textContent,due:$('t_due').textContent};}
+function gather(){
+  return {
+    invoice_no:$('invNo').value.trim(), invoice_date:$('invDate').value||null,
+    cash:$('cash').checked, charge:$('charge').checked,
+    cust_name:$('custName').value, cust_tin:$('custTIN').value,
+    cust_addr:$('custAddr').value, terms:$('terms').value,
+    vat_inclusive:$('vatInclusive').checked,
+    discount:parseFloat($('discount').value)||0, wht:parseFloat($('wht').value)||0,
+    bank:$('bank').value, acct:$('acct').value, check_no:$('check').value,
+    items:[...document.querySelectorAll('#itemBody tr')].map(tr=>({
+      desc:tr.querySelector('.desc').value, qty:tr.querySelector('.qty').value,
+      price:tr.querySelector('.price').value, vat:tr.querySelector('.vat').value})),
+    totals:gatherTotals()
+  };
+}
+function apply(d){
+  d=d||{};
+  $('invNo').value=d.invoice_no||''; $('invDate').value=d.invoice_date||'';
+  $('cash').checked=!!d.cash; $('charge').checked=!!d.charge;
+  $('custName').value=d.cust_name||''; $('custTIN').value=d.cust_tin||'';
+  $('custAddr').value=d.cust_addr||''; $('terms').value=d.terms||'';
+  $('vatInclusive').checked=d.vat_inclusive!==false;
+  $('discount').value=d.discount??0; $('wht').value=d.wht??0;
+  $('bank').value=d.bank||''; $('acct').value=d.acct||''; $('check').value=d.check_no||'';
+  $('itemBody').innerHTML='';
+  (d.items&&d.items.length?d.items:[{}]).forEach(addRow);
+  recalc();
+}
+
+async function refreshList(keep){
+  const {data,error}=await sb.from('pmai_invoices').select('*').order('invoice_no');
+  if(error){setStatus('⚠ '+error.message);return;}
+  CACHE={}; data.forEach(r=>CACHE[r.invoice_no]=r);
+  const sel=$('savedList');
+  sel.innerHTML='<option value="">— Saved invoices ('+data.length+') —</option>';
+  data.forEach(r=>{
+    const o=document.createElement('option');
+    o.value=r.invoice_no;
+    o.textContent='No. '+r.invoice_no+' — '+(r.cust_name||'(no name)')+(r.invoice_date?' · '+r.invoice_date:'');
+    sel.appendChild(o);
+  });
+  if(keep)sel.value=keep;
+}
+function nextNumber(){
+  const nums=Object.keys(CACHE).map(n=>parseInt(n,10)).filter(n=>!isNaN(n));
+  const max=nums.length?Math.max(...nums):750;
+  return String(max+1).padStart(5,'0');
+}
+async function saveInvoice(){
+  const d=gather();
+  if(!d.invoice_no){alert('Please enter an Invoice No. before saving.');return;}
+  setStatus('Saving…');
+  const {error}=await sb.from('pmai_invoices').upsert(d,{onConflict:'invoice_no'});
+  if(error){setStatus('⚠ '+error.message);alert('Save failed: '+error.message);return;}
+  await refreshList(d.invoice_no);
+  setStatus('✓ Saved No. '+d.invoice_no+' · '+new Date().toLocaleTimeString());
+}
+function loadSelected(){
+  const no=$('savedList').value; if(!no)return;
+  if(CACHE[no])apply(CACHE[no]);
+}
+async function deleteCurrent(){
+  const no=$('invNo').value.trim();
+  if(!CACHE[no]){alert('This invoice is not saved yet.');return;}
+  if(!confirm('Delete saved invoice No. '+no+'?'))return;
+  setStatus('Deleting…');
+  const {error}=await sb.from('pmai_invoices').delete().eq('invoice_no',no);
+  if(error){setStatus('⚠ '+error.message);return;}
+  await refreshList(); newInvoice();
+  setStatus('✓ Deleted No. '+no);
+}
+function newInvoice(){
+  apply({});
+  $('invNo').value=nextNumber();
+  $('invDate').value=new Date().toISOString().slice(0,10);
+  $('savedList').value=''; setStatus('New invoice');
+}
+
+(async function init(){
+  loadCal();
+  await refreshList();
+  newInvoice();
+})();
+</script>
+</body>
+</html>
