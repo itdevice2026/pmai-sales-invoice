@@ -857,7 +857,7 @@ let DB_USERS=[], BK_GROUPS={};
 function userName(uid){ const u=DB_USERS.find(x=>x.user_id===uid); return u?(u.full_name||u.email||uid):uid; }
 function userChecklistHtml(prefix, selSet){
   if(!DB_USERS.length) return '<span style="color:#a52a2a">No users found.</span>';
-  return DB_USERS.map(u=>`<label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="${prefix}${u.user_id}"${selSet&&selSet.has(u.user_id)?' checked':''}> ${(u.full_name||u.email||u.user_id).replace(/</g,'&lt;')}</label>`).join('');
+  return DB_USERS.map(u=>`<label style="font-size:13px;display:flex;align-items:center;gap:8px;padding:4px 6px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="${prefix}${u.user_id}" style="width:16px;height:16px;flex:0 0 auto;margin:0"${selSet&&selSet.has(u.user_id)?' checked':''}> <span>${(u.full_name||u.email||u.user_id).replace(/</g,'&lt;')}</span></label>`).join('');
 }
 function checkedUids(prefix){ return DB_USERS.filter(u=>{const e=$(prefix+u.user_id);return e&&e.checked;}).map(u=>u.user_id); }
 function bkToggle(){ const p=$('bkAssignList'); p.style.display=(p.style.display==='block')?'none':'block'; }
