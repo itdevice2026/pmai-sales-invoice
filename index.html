@@ -286,8 +286,9 @@
     <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;background:#f8fafc">
       <strong style="font-size:13px;color:var(--brand)">Add a user</strong>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
-        <input id="auEmail" type="email" placeholder="email@meatplus.ph" style="flex:1;min-width:180px;padding:8px;border:1px solid #c4ccd4;border-radius:7px">
-        <input id="auPass" type="text" placeholder="password (min 6)" style="width:150px;padding:8px;border:1px solid #c4ccd4;border-radius:7px">
+        <input id="auName" type="text" placeholder="Full name" style="width:160px;padding:8px;border:1px solid #c4ccd4;border-radius:7px">
+        <input id="auEmail" type="email" placeholder="email@meatplus.ph" style="flex:1;min-width:160px;padding:8px;border:1px solid #c4ccd4;border-radius:7px">
+        <input id="auPass" type="text" placeholder="password (min 6)" style="width:140px;padding:8px;border:1px solid #c4ccd4;border-radius:7px">
         <select id="auRole" style="padding:8px;border:1px solid #c4ccd4;border-radius:7px">
           <option value="viewer">viewer</option><option value="encoder">encoder</option><option value="admin">admin</option>
         </select>
@@ -660,13 +661,14 @@ async function openUsers(){
     data=out.users||[];
   }catch(e){$('usersBody').textContent='⚠ '+e;return;}
   let h='<div style="font-size:12px;color:#666;margin-bottom:6px">'+data.length+' registered account(s). “— no access —” means they cannot use this system.</div>';
-  h+='<table><tr><th>Email</th><th>Role</th><th>Password</th></tr>';
+  h+='<table><tr><th>Full name</th><th>Email</th><th>Role</th><th>Password</th></tr>';
   data.forEach(u=>{
     const cur=u.role||'';
     const opts=[['','— no access —'],['viewer','viewer'],['encoder','encoder'],['admin','admin']];
     const sel=opts.map(([v,t])=>`<option value="${v}"${cur===v?' selected':''}>${t}</option>`).join('');
     const em=(u.email||'').replace(/</g,'&lt;').replace(/'/g,"\\'");
-    h+=`<tr><td>${(u.email||u.user_id).replace(/</g,'&lt;')}</td><td><select onchange="setRole('${u.user_id}','${em}',this.value)">${sel}</select></td><td style="white-space:nowrap"><button onclick="adminSetPassword('${em}',this)" ${u.email?'':'disabled'}>Set password</button> <button onclick="adminResetPassword('${em}',this)" ${u.email?'':'disabled'}>Email reset</button></td></tr>`;
+    const nm=(u.full_name||'').replace(/"/g,'&quot;');
+    h+=`<tr><td><input value="${nm}" placeholder="(name)" onchange="setName('${u.user_id}','${em}',this.value)" style="width:140px;padding:4px;border:1px solid #c4ccd4;border-radius:6px"></td><td>${(u.email||u.user_id).replace(/</g,'&lt;')}</td><td><select onchange="setRole('${u.user_id}','${em}',this.value)">${sel}</select></td><td style="white-space:nowrap"><button onclick="adminSetPassword('${em}',this)" ${u.email?'':'disabled'}>Set password</button> <button onclick="adminResetPassword('${em}',this)" ${u.email?'':'disabled'}>Email reset</button></td></tr>`;
   });
   h+='</table><div id="usersMsg" style="font-size:12px;color:#0b3d2e;margin-top:8px"></div>';
   $('usersBody').innerHTML=h;
@@ -681,6 +683,7 @@ async function setRole(uid,email,role){
   if(m){m.style.color='#0b3d2e';m.textContent='✓ Updated '+(email||uid)+' → '+(role||'no access');}
 }
 async function adminCreateUser(btn){
+  const full_name=$('auName').value.trim();
   const email=$('auEmail').value.trim().toLowerCase();
   const password=$('auPass').value;
   const role=$('auRole').value;
@@ -692,13 +695,19 @@ async function adminCreateUser(btn){
     const {data:{session}}=await sb.auth.getSession();
     const res=await fetch(SUPABASE_URL+'/functions/v1/pmai-admin',{method:'POST',
       headers:{'Authorization':'Bearer '+session.access_token,'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
-      body:JSON.stringify({action:'create_user',email,password,role})});
+      body:JSON.stringify({action:'create_user',email,password,role,full_name})});
     const out=await res.json().catch(()=>({error:'Bad response ('+res.status+')'}));
     if(!res.ok||out.error){ m.style.color='#a52a2a'; m.textContent='⚠ '+(out.error||res.status); }
-    else { m.style.color='#0b3d2e'; m.textContent='✓ Created '+email+' ('+role+')';
-      $('auEmail').value=''; $('auPass').value=''; openUsers(); }
+    else { m.style.color='#0b3d2e'; m.textContent='✓ Created '+(full_name||email)+' ('+role+')';
+      $('auName').value=''; $('auEmail').value=''; $('auPass').value=''; openUsers(); }
   }catch(e){ m.style.color='#a52a2a'; m.textContent='⚠ '+e; }
   if(btn){btn.disabled=false;btn.textContent='Create';}
+}
+async function setName(uid,email,name){
+  const {error}=await sb.from('pmai_user_roles').update({full_name:name}).eq('user_id',uid);
+  const m=$('usersMsg');
+  if(error){ if(m){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;} return; }
+  if(m){m.style.color='#0b3d2e';m.textContent='✓ Name saved for '+(email||uid)+'. (Assign a role first if it didn\\'t stick.)';}
 }
 async function adminSetPassword(email,btn){
   if(!email)return;
@@ -734,7 +743,7 @@ let TXN=[];
 function fmtTs(t){ if(!t)return ''; const d=new Date(t); return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 async function openTxn(){
   $('txnPanel').style.display='flex'; $('txnBody').textContent='Loading…'; $('txnSearch').value='';
-  const {data,error}=await sb.from('pmai_invoices').select('invoice_no,invoice_date,cust_name,totals,created_at,updated_at,created_by_email').order('created_at',{ascending:false});
+  const {data,error}=await sb.from('pmai_invoices').select('invoice_no,invoice_date,cust_name,totals,created_at,updated_at,created_by_email,created_by_name').order('created_at',{ascending:false});
   if(error){$('txnBody').textContent='⚠ '+error.message;return;}
   TXN=data||[]; renderTxn();
 }
@@ -749,27 +758,41 @@ function renderTxn(){
     +'<th style="text-align:right;border-bottom:1px solid #ddd;padding:6px">Amount Due</th>'
     +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Created by</th>'
     +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Created</th>'
-    +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Last updated</th></tr>';
+    +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Last updated</th>'
+    +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Action</th></tr>';
   rows.forEach(r=>{
     const due=(r.totals&&r.totals.due)?r.totals.due:'';
-    h+='<tr>'
+    const by=r.created_by_name||r.created_by_email||'—';
+    const no=String(r.invoice_no).replace(/'/g,"\\'");
+    h+='<tr style="cursor:pointer" onclick="txnOpen(\''+no+'\',false)" title="Open this invoice">'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+String(r.invoice_no).replace(/</g,'&lt;')+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+String(r.cust_name||'').replace(/</g,'&lt;')+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+(r.invoice_date||'')+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0;text-align:right;font-variant-numeric:tabular-nums">'+due+'</td>'
-      +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+String(r.created_by_email||'—').replace(/</g,'&lt;')+'</td>'
+      +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+String(by).replace(/</g,'&lt;')+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+fmtTs(r.created_at)+'</td>'
-      +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+fmtTs(r.updated_at)+'</td></tr>';
+      +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+fmtTs(r.updated_at)+'</td>'
+      +'<td style="padding:6px;border-bottom:1px solid #f0f0f0;white-space:nowrap" onclick="event.stopPropagation()"><button onclick="txnOpen(\''+no+'\',false)">Edit</button> <button onclick="txnOpen(\''+no+'\',true)">🖨 Re-print</button></td></tr>';
   });
-  h+='</table><div style="font-size:12px;color:#666;margin-top:8px">'+rows.length+' transaction(s)</div>';
+  h+='</table><div style="font-size:12px;color:#666;margin-top:8px">'+rows.length+' transaction(s) — click a row to open it.</div>';
   $('txnBody').innerHTML=h;
+}
+async function txnOpen(no, doprint){
+  let row=CACHE[no];
+  if(!row){ const {data}=await sb.from('pmai_invoices').select('*').eq('invoice_no',no).maybeSingle(); row=data; }
+  if(!row){ alert('Invoice '+no+' not found.'); return; }
+  apply(row);
+  $('savedList').value=no;
+  closeTxn();
+  if(doprint){ setTimeout(()=>doPrint(), 250); }
+  else { setStatus('Opened No. '+no+(can.edit()?' — edit then Save':' (view/print only)')); }
 }
 function exportTxnCsv(){
   const q=($('txnSearch').value||'').toLowerCase();
   const rows=TXN.filter(r=>!q||String(r.invoice_no).toLowerCase().includes(q)||String(r.cust_name||'').toLowerCase().includes(q));
   const esc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
   let csv='Invoice No,Customer,Invoice Date,Amount Due,Created By,Created,Last Updated\n';
-  rows.forEach(r=>{ csv+=[r.invoice_no,r.cust_name||'',r.invoice_date||'',(r.totals&&r.totals.due)||'',r.created_by_email||'',fmtTs(r.created_at),fmtTs(r.updated_at)].map(esc).join(',')+'\n'; });
+  rows.forEach(r=>{ csv+=[r.invoice_no,r.cust_name||'',r.invoice_date||'',(r.totals&&r.totals.due)||'',r.created_by_name||r.created_by_email||'',fmtTs(r.created_at),fmtTs(r.updated_at)].map(esc).join(',')+'\n'; });
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='pmai-transactions-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
