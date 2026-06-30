@@ -243,12 +243,18 @@
         </select></div>
       <div class="fld"><label for="cSpace">Row spacing (mm)</label>
         <input type="number" id="cSpace" step="0.1" value="5.6" onchange="calibChanged()"></div>
+      <div class="fld"><label for="cBg">Background (PDF / image of the form)</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="file" id="cBg" accept="application/pdf,image/*" onchange="changeBg(this)" style="min-width:200px">
+          <button onclick="resetBg()" title="Revert to built-in form">↺</button>
+        </div></div>
       <div class="spacer">
-        <button onclick="resetCalib()">↺ Reset</button>
+        <button onclick="resetCalib()">↺ Reset fields</button>
         <button class="primary" onclick="saveCalib()">💾 Save (shared)</button>
         <button onclick="closeCalib()">✕ Close</button>
       </div>
     </div>
+    <div id="cBgMsg" style="font-size:12px;color:#666;margin-top:6px"></div>
   </div>
   <div class="canvasWrap"><div id="calibCanvas"></div></div>
 </div>
@@ -275,6 +281,8 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = "https://emkcwukiqxnvcbhkjiqz.supabase.co";
@@ -501,7 +509,7 @@ function openCalib(){
   $('cFont').value=CALIB.font; $('cSize').value=CALIB.sizePt; $('cSpace').value=CALIB.spacingMM;
   const cv=$('calibCanvas');
   cv.style.width=CW+'px'; cv.style.height=CH+'px';
-  cv.style.backgroundImage='url('+FORM_BG+')';
+  cv.style.backgroundImage='url('+(CALIB.bg||FORM_BG)+')';
   cv.style.fontFamily=FONT_FAMILY[CALIB.font];
   renderChips();
   $('calibPanel').style.display='block';
@@ -567,30 +575,68 @@ async function loadCalib(){
   const {data}=await sb.from('pmai_settings').select('value').eq('key','calibration').maybeSingle();
   const d=defaultCalib();
   if(data&&data.value&&data.value.fields){
-    CALIB={font:data.value.font||d.font,sizePt:data.value.sizePt||d.sizePt,spacingMM:data.value.spacingMM||d.spacingMM,fields:Object.assign(d.fields,data.value.fields)};
+    CALIB={font:data.value.font||d.font,sizePt:data.value.sizePt||d.sizePt,spacingMM:data.value.spacingMM||d.spacingMM,fields:Object.assign(d.fields,data.value.fields),bg:data.value.bg||null};
   } else { CALIB=d; }
 }
+async function changeBg(input){
+  const file=input.files&&input.files[0]; if(!file)return;
+  const m=$('cBgMsg'); if(m){m.style.color='#666';m.textContent='Loading…';}
+  try{
+    let dataUrl;
+    if(file.type==='application/pdf'||/\.pdf$/i.test(file.name)){
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      const page=await pdf.getPage(1);
+      const vp0=page.getViewport({scale:1});
+      const scale=900/vp0.width;
+      const vp=page.getViewport({scale});
+      const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+      await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+      dataUrl=c.toDataURL('image/jpeg',0.72);
+    } else if(file.type.startsWith('image/')){
+      dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(file);});
+    } else { if(m){m.style.color='#a52a2a';m.textContent='Use a PDF or image file.';} return; }
+    CALIB.bg=dataUrl;
+    $('calibCanvas').style.backgroundImage='url('+dataUrl+')';
+    if(m){m.style.color='#0b3d2e';m.textContent='✓ Background updated — drag fields to match, then Save.';}
+  }catch(e){ if(m){m.style.color='#a52a2a';m.textContent='⚠ '+e;} }
+}
+function resetBg(){ CALIB.bg=null; $('calibCanvas').style.backgroundImage='url('+FORM_BG+')'; const m=$('cBgMsg'); if(m){m.textContent='Reverted to the built-in form. Save to apply.';} }
 
 /* ===== users (admin) ===== */
 async function openUsers(){
   if(!can.users()){alert('Admins only.');return;}
   $('usersPanel').style.display='flex'; $('usersBody').textContent='Loading…';
-  const {data,error}=await sb.from('pmai_user_roles').select('*').order('email');
-  if(error){$('usersBody').textContent='⚠ '+error.message;return;}
-  let h='<table><tr><th>Email</th><th>Role</th><th>Password</th></tr>';
+  let data;
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    const res=await fetch(SUPABASE_URL+'/functions/v1/pmai-admin',{method:'POST',
+      headers:{'Authorization':'Bearer '+session.access_token,'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({action:'list_users'})});
+    const out=await res.json().catch(()=>({error:'Bad response ('+res.status+')'}));
+    if(!res.ok||out.error){$('usersBody').textContent='⚠ '+(out.error||res.status);return;}
+    data=out.users||[];
+  }catch(e){$('usersBody').textContent='⚠ '+e;return;}
+  let h='<div style="font-size:12px;color:#666;margin-bottom:6px">'+data.length+' registered account(s). “— no access —” means they cannot use this system.</div>';
+  h+='<table><tr><th>Email</th><th>Role</th><th>Password</th></tr>';
   data.forEach(u=>{
-    const sel=['admin','encoder','viewer'].map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join('');
+    const cur=u.role||'';
+    const opts=[['','— no access —'],['viewer','viewer'],['encoder','encoder'],['admin','admin']];
+    const sel=opts.map(([v,t])=>`<option value="${v}"${cur===v?' selected':''}>${t}</option>`).join('');
     const em=(u.email||'').replace(/</g,'&lt;').replace(/'/g,"\\'");
-    h+=`<tr><td>${(u.email||u.user_id).replace(/</g,'&lt;')}</td><td><select onchange="setRole('${u.user_id}',this.value)">${sel}</select></td><td style="white-space:nowrap"><button onclick="adminSetPassword('${em}',this)" ${u.email?'':'disabled'}>Set password</button> <button onclick="adminResetPassword('${em}',this)" ${u.email?'':'disabled'}>Email reset</button></td></tr>`;
+    h+=`<tr><td>${(u.email||u.user_id).replace(/</g,'&lt;')}</td><td><select onchange="setRole('${u.user_id}','${em}',this.value)">${sel}</select></td><td style="white-space:nowrap"><button onclick="adminSetPassword('${em}',this)" ${u.email?'':'disabled'}>Set password</button> <button onclick="adminResetPassword('${em}',this)" ${u.email?'':'disabled'}>Email reset</button></td></tr>`;
   });
   h+='</table><div id="usersMsg" style="font-size:12px;color:#0b3d2e;margin-top:8px"></div>';
   $('usersBody').innerHTML=h;
 }
 function closeUsers(){ $('usersPanel').style.display='none'; }
-async function setRole(uid,role){
-  const {error}=await sb.from('pmai_user_roles').update({role}).eq('user_id',uid);
-  if(error){alert('Update failed: '+error.message);return;}
-  setStatus('✓ Role updated');
+async function setRole(uid,email,role){
+  let error;
+  if(role===''){ ({error}=await sb.from('pmai_user_roles').delete().eq('user_id',uid)); }
+  else { ({error}=await sb.from('pmai_user_roles').upsert({user_id:uid,email,role},{onConflict:'user_id'})); }
+  const m=$('usersMsg');
+  if(error){ if(m){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;} return; }
+  if(m){m.style.color='#0b3d2e';m.textContent='✓ Updated '+(email||uid)+' → '+(role||'no access');}
 }
 async function adminCreateUser(btn){
   const email=$('auEmail').value.trim().toLowerCase();
