@@ -734,7 +734,7 @@ let TXN=[];
 function fmtTs(t){ if(!t)return ''; const d=new Date(t); return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 async function openTxn(){
   $('txnPanel').style.display='flex'; $('txnBody').textContent='Loading…'; $('txnSearch').value='';
-  const {data,error}=await sb.from('pmai_invoices').select('invoice_no,invoice_date,cust_name,totals,created_at,updated_at').order('created_at',{ascending:false});
+  const {data,error}=await sb.from('pmai_invoices').select('invoice_no,invoice_date,cust_name,totals,created_at,updated_at,created_by_email').order('created_at',{ascending:false});
   if(error){$('txnBody').textContent='⚠ '+error.message;return;}
   TXN=data||[]; renderTxn();
 }
@@ -747,6 +747,7 @@ function renderTxn(){
     +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Customer</th>'
     +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Inv. date</th>'
     +'<th style="text-align:right;border-bottom:1px solid #ddd;padding:6px">Amount Due</th>'
+    +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Created by</th>'
     +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Created</th>'
     +'<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px">Last updated</th></tr>';
   rows.forEach(r=>{
@@ -756,6 +757,7 @@ function renderTxn(){
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+String(r.cust_name||'').replace(/</g,'&lt;')+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+(r.invoice_date||'')+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0;text-align:right;font-variant-numeric:tabular-nums">'+due+'</td>'
+      +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+String(r.created_by_email||'—').replace(/</g,'&lt;')+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+fmtTs(r.created_at)+'</td>'
       +'<td style="padding:6px;border-bottom:1px solid #f0f0f0">'+fmtTs(r.updated_at)+'</td></tr>';
   });
@@ -766,8 +768,8 @@ function exportTxnCsv(){
   const q=($('txnSearch').value||'').toLowerCase();
   const rows=TXN.filter(r=>!q||String(r.invoice_no).toLowerCase().includes(q)||String(r.cust_name||'').toLowerCase().includes(q));
   const esc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-  let csv='Invoice No,Customer,Invoice Date,Amount Due,Created,Last Updated\n';
-  rows.forEach(r=>{ csv+=[r.invoice_no,r.cust_name||'',r.invoice_date||'',(r.totals&&r.totals.due)||'',fmtTs(r.created_at),fmtTs(r.updated_at)].map(esc).join(',')+'\n'; });
+  let csv='Invoice No,Customer,Invoice Date,Amount Due,Created By,Created,Last Updated\n';
+  rows.forEach(r=>{ csv+=[r.invoice_no,r.cust_name||'',r.invoice_date||'',(r.totals&&r.totals.due)||'',r.created_by_email||'',fmtTs(r.created_at),fmtTs(r.updated_at)].map(esc).join(',')+'\n'; });
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='pmai-transactions-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
