@@ -251,7 +251,7 @@
       <div class="fld"><label>Show background</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgShow" checked onchange="toggleBg()"> Show form image</label></div>
       <div class="fld"><label>Lock text</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cLock" onchange="toggleLock()"> 🔒 Lock dragging</label></div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cLock" checked onchange="toggleLock()"> 🔒 Locked (password to unlock)</label></div>
       <div class="spacer">
         <button onclick="resetCalib()">↺ Reset fields</button>
         <button class="primary" onclick="saveCalib()">💾 Save (shared)</button>
@@ -511,7 +511,7 @@ function chipFontPx(){ return (CALIB.sizePt*0.352778*S); }
 function openCalib(){
   if(!can.calib()){alert('Only an Admin can change Print Calibration.');return;}
   $('cFont').value=CALIB.font; $('cSize').value=CALIB.sizePt; $('cSpace').value=CALIB.spacingMM;
-  $('cLock').checked=DRAG_LOCKED; $('cBgShow').checked=true;
+  DRAG_LOCKED=true; $('cLock').checked=true; $('cBgShow').checked=true;
   const cv=$('calibCanvas');
   cv.style.width=CW+'px'; cv.style.height=CH+'px';
   cv.style.backgroundImage='url('+(CALIB.bg||FORM_BG)+')';
@@ -550,11 +550,20 @@ function renderGhosts(){
     });
   }
 }
-let DRAG_LOCKED=false;
-function toggleLock(){
-  DRAG_LOCKED=$('cLock').checked;
-  document.querySelectorAll('#calibCanvas .chip:not(.ghost)').forEach(c=>{ c.style.cursor=DRAG_LOCKED?'default':'grab'; });
-  const m=$('cBgMsg'); if(m){m.style.color='#666';m.textContent=DRAG_LOCKED?'🔒 Text locked — drag disabled.':'🔓 Text unlocked — you can drag fields.';}
+let DRAG_LOCKED=true;
+function applyLockCursor(){ document.querySelectorAll('#calibCanvas .chip:not(.ghost)').forEach(c=>{ c.style.cursor=DRAG_LOCKED?'default':'grab'; }); }
+async function toggleLock(){
+  const cb=$('cLock'), m=$('cBgMsg');
+  if(!cb.checked){ // unticking = request to UNLOCK -> require admin password
+    const pw=prompt('Enter your admin password to unlock text dragging:');
+    if(pw===null){ cb.checked=true; return; }
+    const email=(ME&&ME.email)||'';
+    const {error}=await sb.auth.signInWithPassword({email,password:pw});
+    if(error){ cb.checked=true; DRAG_LOCKED=true; applyLockCursor(); if(m){m.style.color='#a52a2a';m.textContent='⚠ Incorrect password — dragging stays locked.';} return; }
+  }
+  DRAG_LOCKED=cb.checked;
+  applyLockCursor();
+  if(m){m.style.color='#666';m.textContent=DRAG_LOCKED?'🔒 Text locked — drag disabled.':'🔓 Unlocked — you can drag fields.';}
 }
 function attachDrag(el){
   el.addEventListener('pointerdown',e=>{
