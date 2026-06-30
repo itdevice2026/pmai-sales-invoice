@@ -286,19 +286,10 @@
     <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;background:#fffaf0">
       <strong style="font-size:13px;color:var(--brand)">Booklets (invoice serials)</strong>
       <div style="font-size:11px;color:#666;margin:4px 0">Add a booklet's serial range and assign the user who will use it. Each user can only use numbers from booklets assigned to them (or unassigned).</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-        <input id="bkLabel" placeholder="Booklet label" style="width:130px;padding:6px;border:1px solid #c4ccd4;border-radius:6px">
-        <label style="font-size:12px">From <input id="numFrom" type="number" value="1501" style="width:84px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
-        <label style="font-size:12px">To <input id="numTo" type="number" value="1550" style="width:84px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
-        <label style="font-size:12px">Digits <input id="numWidth" type="number" value="5" style="width:54px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
-        <button class="primary" onclick="addBooklet(this)">Add booklet</button>
-      </div>
-      <div style="font-size:12px;color:#444;margin-top:8px">Who can use it (none ticked = Anyone):</div>
-      <div style="position:relative;display:inline-block;margin-top:4px">
-        <button type="button" id="bkAssignBtn" onclick="bkToggle()" style="min-width:200px;text-align:left">Anyone ▾</button>
-        <div id="bkAssignList" onchange="bkUpdateBtn()" style="display:none;position:absolute;z-index:30;background:#fff;border:1px solid #c4ccd4;border-radius:8px;padding:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);max-height:220px;overflow:auto;min-width:240px"></div>
-      </div>
-      <div id="bkBody" style="font-size:12px;margin-top:10px">Loading…</div>
+      <div id="bkRows"></div>
+      <div style="margin-top:4px"><button type="button" onclick="addBkRow()">＋ Add another series</button></div>
+      <button class="primary" onclick="addBooklet(this)" style="margin-top:8px">Add booklet(s)</button>
+      <div id="bkBody" style="font-size:12px;margin-top:12px">Loading…</div>
     </div>
     <div id="dbMsg" style="font-size:12px;margin:6px 0"></div>
     <div id="dbBody" style="font-size:12.5px"></div>
@@ -845,6 +836,7 @@ async function openDb(){
   if(!can.users()){alert('Only an Admin can manage the database.');return;}
   $('dbPanel').style.display='flex'; $('dbMsg').textContent='';
   await loadDbUsers();
+  $('bkRows').innerHTML=''; addBkRow();
   renderBooklets();
   dbCounts();
 }
@@ -860,33 +852,52 @@ function userChecklistHtml(prefix, selSet){
   return DB_USERS.map(u=>`<label style="font-size:13px;display:flex;align-items:center;gap:8px;padding:4px 6px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="${prefix}${u.user_id}" style="width:16px;height:16px;flex:0 0 auto;margin:0"${selSet&&selSet.has(u.user_id)?' checked':''}> <span>${(u.full_name||u.email||u.user_id).replace(/</g,'&lt;')}</span></label>`).join('');
 }
 function checkedUids(prefix){ return DB_USERS.filter(u=>{const e=$(prefix+u.user_id);return e&&e.checked;}).map(u=>u.user_id); }
-function bkToggle(){ const p=$('bkAssignList'); p.style.display=(p.style.display==='block')?'none':'block'; }
-function bkUpdateBtn(){
-  const ids=checkedUids('bka_');
-  const btn=$('bkAssignBtn'); if(!btn)return;
-  btn.textContent=(ids.length? (ids.length===1? userName(ids[0]) : ids.length+' users selected') : 'Anyone')+' ▾';
-}
-document.addEventListener('click',e=>{ const w=$('bkAssignBtn'); const p=$('bkAssignList'); if(w&&p&&!w.contains(e.target)&&!p.contains(e.target)) p.style.display='none'; });
 async function loadDbUsers(){
   const {data}=await sb.from('pmai_user_roles').select('user_id,email,full_name').order('email');
   DB_USERS=data||[];
-  if($('bkAssignList')){ $('bkAssignList').innerHTML=userChecklistHtml('bka_',null); bkUpdateBtn(); }
 }
+let BK_I=0;
+function addBkRow(){
+  BK_I++; const i=BK_I;
+  const div=document.createElement('div');
+  div.className='bkrow'; div.dataset.idx=i;
+  div.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #e2e8f0';
+  div.innerHTML='<input class="bl" placeholder="Booklet label" style="width:130px;padding:6px;border:1px solid #c4ccd4;border-radius:6px">'
+    +'<label style="font-size:12px">From <input class="bf" type="number" style="width:84px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>'
+    +'<label style="font-size:12px">To <input class="bt" type="number" style="width:84px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>'
+    +'<label style="font-size:12px">Digits <input class="bd" type="number" value="5" style="width:54px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>'
+    +'<div style="position:relative;display:inline-block"><button type="button" id="bkbtn'+i+'" onclick="bkToggleRow('+i+')" style="min-width:150px;text-align:left">Anyone ▾</button>'
+    +'<div id="bka'+i+'_panel" onchange="bkUpdateRow('+i+')" style="display:none;position:absolute;z-index:30;background:#fff;border:1px solid #c4ccd4;border-radius:8px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.18);max-height:200px;overflow:auto;min-width:230px"></div></div>'
+    +'<button type="button" onclick="this.closest(\'.bkrow\').remove()" title="Remove series" style="color:#a52a2a">✕</button>';
+  $('bkRows').appendChild(div);
+  $('bka'+i+'_panel').innerHTML=userChecklistHtml('bka'+i+'_',null);
+}
+function bkToggleRow(i){ const p=$('bka'+i+'_panel'); p.style.display=(p.style.display==='block')?'none':'block'; }
+function bkUpdateRow(i){ const ids=checkedUids('bka'+i+'_'); const b=$('bkbtn'+i); if(b) b.textContent=(ids.length?(ids.length===1?userName(ids[0]):ids.length+' users'):'Anyone')+' ▾'; }
+document.addEventListener('click',e=>{
+  document.querySelectorAll('#bkRows [id$="_panel"]').forEach(p=>{ const w=p.parentElement; if(w&&!w.contains(e.target)) p.style.display='none'; });
+});
 async function addBooklet(btn){
-  const label=$('bkLabel').value.trim();
-  const from=parseInt($('numFrom').value,10), to=parseInt($('numTo').value,10), w=parseInt($('numWidth').value,10)||5;
+  const rows=[...document.querySelectorAll('#bkRows .bkrow')];
   const m=$('dbMsg');
-  if(!label){m.style.color='#a52a2a';m.textContent='Enter a booklet label.';return;}
-  if(isNaN(from)||isNaN(to)||to<from){m.style.color='#a52a2a';m.textContent='Enter a valid From/To range.';return;}
-  if(to-from>5000){m.style.color='#a52a2a';m.textContent='Range too large (max 5000 at once).';return;}
-  const uids=checkedUids('bka_');
-  const emails=uids.map(id=>(DB_USERS.find(u=>u.user_id===id)||{}).email||'');
+  if(!rows.length){m.style.color='#a52a2a';m.textContent='Add at least one series row.';return;}
+  let payload=[], summary=[];
+  for(const r of rows){
+    const label=r.querySelector('.bl').value.trim();
+    const from=parseInt(r.querySelector('.bf').value,10), to=parseInt(r.querySelector('.bt').value,10), w=parseInt(r.querySelector('.bd').value,10)||5;
+    if(!label){m.style.color='#a52a2a';m.textContent='Each series needs a booklet label.';return;}
+    if(isNaN(from)||isNaN(to)||to<from){m.style.color='#a52a2a';m.textContent='“'+label+'”: enter a valid From/To range.';return;}
+    if(to-from>5000){m.style.color='#a52a2a';m.textContent='“'+label+'”: range too large (max 5000).';return;}
+    const i=r.dataset.idx; const uids=checkedUids('bka'+i+'_'); const emails=uids.map(id=>(DB_USERS.find(u=>u.user_id===id)||{}).email||'');
+    for(let n=from;n<=to;n++) payload.push({number:String(n).padStart(w,'0'),booklet:label,assignees:uids.length?uids:null,assignee_emails:uids.length?emails:null});
+    summary.push(label);
+  }
+  if(payload.length>20000){m.style.color='#a52a2a';m.textContent='Too many numbers at once ('+payload.length+'). Reduce the ranges.';return;}
   if(btn){btn.disabled=true;btn.textContent='Adding…';}
-  const payload=[]; for(let i=from;i<=to;i++) payload.push({number:String(i).padStart(w,'0'),booklet:label,assignees:uids.length?uids:null,assignee_emails:uids.length?emails:null});
   const {error}=await sb.from('pmai_invoice_numbers').upsert(payload,{onConflict:'number'});
   if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;}
-  else { await loadNumbers(); m.style.color='#0b3d2e'; m.textContent='✓ Booklet "'+label+'" added ('+payload.length+' numbers'+(uids.length?', for '+emails.join(', '):' — Anyone')+').'; $('bkLabel').value=''; await loadDbUsers(); renderBooklets(); dbCounts(); if(!$('invNo').value)newInvoice(); }
-  if(btn){btn.disabled=false;btn.textContent='Add booklet';}
+  else { await loadNumbers(); m.style.color='#0b3d2e'; m.textContent='✓ Added '+summary.length+' booklet(s) — '+payload.length+' numbers ('+summary.join(', ')+').'; $('bkRows').innerHTML=''; addBkRow(); renderBooklets(); dbCounts(); if(!$('invNo').value)newInvoice(); }
+  if(btn){btn.disabled=false;btn.textContent='Add booklet(s)';}
 }
 function renderBooklets(){
   const g={}; BK_GROUPS=g;
