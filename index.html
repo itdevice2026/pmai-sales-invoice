@@ -232,7 +232,7 @@
 <div id="calibPanel">
   <div class="cbar">
     <h2>Print Calibration <span style="font-size:11px;color:#a52a2a;font-weight:600">(Admin only — shared to all users)</span></h2>
-    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Alignment is sized to <strong>A4 (210 × 297 mm)</strong>. A column's position and the <strong>row spacing</strong> apply to all line rows. <strong>Drag an empty area</strong> to move the background image, or use <strong>Background zoom</strong> to scale it. Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
+    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Alignment is sized to <strong>A4 (210 × 297 mm)</strong>. A column's position and the <strong>row spacing</strong> apply to all line rows. Tick <strong>“Move background”</strong> then drag to reposition the form image, or use <strong>Background zoom</strong> to scale it (untick to drag fields again). Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
     <div class="ctrls">
       <div class="fld"><label for="cFont">Print font</label>
         <select id="cFont" onchange="calibChanged()">
@@ -255,6 +255,8 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgShow" checked onchange="toggleBg()"> Show form image</label></div>
       <div class="fld"><label>Lock text</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cLock" checked onchange="toggleLock()"> 🔒 Locked (password to unlock)</label></div>
+      <div class="fld"><label>Move background</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgMove" onchange="toggleBgMove()"> ✋ Drag to move image</label></div>
       <div class="fld"><label for="cBgZoom">Background zoom (%)</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="number" id="cBgZoom" value="100" step="2" style="width:80px" onchange="setBgZoom(this.value)">
@@ -610,8 +612,9 @@ function openCalib(){
   cv.style.fontFamily=FONT_FAMILY[CALIB.font];
   if($('cBgZoom')) $('cBgZoom').value=CALIB.bgScale||100;
   applyBg();
-  if(!cv.dataset.panbound){ cv.dataset.panbound='1'; bindBgPan(cv); }
   renderChips();
+  ensureMover();
+  if($('cBgMove')){ $('cBgMove').checked=false; toggleBgMove(); }
   $('calibPanel').style.display='block';
 }
 function applyBg(){
@@ -622,15 +625,21 @@ function applyBg(){
 }
 function setBgZoom(v){ CALIB.bgScale=parseFloat(v)||100; applyBg(); }
 function resetBg2(){ CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; if($('cBgZoom'))$('cBgZoom').value=100; applyBg(); }
-function bindBgPan(cv){
-  cv.addEventListener('pointerdown',e=>{
-    if(e.target!==cv) return; // only when dragging empty area, not a chip
+function ensureMover(){
+  const cv=$('calibCanvas');
+  let mv=$('bgMover');
+  if(!mv){ mv=document.createElement('div'); mv.id='bgMover'; mv.style.cssText='position:absolute;inset:0;z-index:50;display:none;cursor:move'; cv.appendChild(mv); bindBgPan(mv); }
+  return mv;
+}
+function toggleBgMove(){ const on=$('cBgMove').checked; ensureMover().style.display=on?'block':'none'; }
+function bindBgPan(el){
+  el.addEventListener('pointerdown',e=>{
     e.preventDefault();
     const sx=e.clientX, sy=e.clientY, ox=CALIB.bgX||0, oy=CALIB.bgY||0;
-    cv.setPointerCapture(e.pointerId);
+    try{el.setPointerCapture(e.pointerId);}catch(_){}
     const mv=ev=>{ CALIB.bgX=ox+(ev.clientX-sx); CALIB.bgY=oy+(ev.clientY-sy); applyBg(); };
-    const up=()=>{ cv.releasePointerCapture(e.pointerId); cv.removeEventListener('pointermove',mv); cv.removeEventListener('pointerup',up); };
-    cv.addEventListener('pointermove',mv); cv.addEventListener('pointerup',up);
+    const up=()=>{ try{el.releasePointerCapture(e.pointerId);}catch(_){} el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up); };
+    el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
   });
 }
 function closeCalib(){ $('calibPanel').style.display='none'; }
