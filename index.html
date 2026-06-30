@@ -182,9 +182,9 @@
     </div>
     <table class="soldto">
       <tr><td class="stitle" colspan="2">SOLD TO:</td></tr>
-      <tr><td class="k">Registered Name</td><td><input id="custName" list="custList" autocomplete="off" onchange="custLookup()"></td></tr>
-      <tr><td class="k">TIN</td><td><div style="display:flex"><input id="custTIN" style="flex:1"><span style="border-left:1px solid #000;padding:6px 8px;font-weight:700;white-space:nowrap">Terms:</span><input id="terms" style="flex:1"></div></td></tr>
-      <tr><td class="k">Business Address</td><td><input id="custAddr"></td></tr>
+      <tr><td class="k">Registered Name</td><td><input id="custName" list="custList" autocomplete="off" onchange="custLookup();autoCaptureCustomer()"></td></tr>
+      <tr><td class="k">TIN</td><td><div style="display:flex"><input id="custTIN" style="flex:1" onchange="autoCaptureCustomer()"><span style="border-left:1px solid #000;padding:6px 8px;font-weight:700;white-space:nowrap">Terms:</span><input id="terms" style="flex:1" onchange="autoCaptureCustomer()"></div></td></tr>
+      <tr><td class="k">Business Address</td><td><input id="custAddr" onchange="autoCaptureCustomer()"></td></tr>
     </table>
     <table class="items">
       <colgroup><col class="desc"><col class="qty"><col class="price"><col class="amt"><col class="vat"></colgroup>
@@ -447,7 +447,7 @@ function setReadonly(ro){
 function addRow(data){
   const tr=document.createElement('tr');
   tr.innerHTML=`
-    <td><input class="desc" list="itemList" autocomplete="off"></td>
+    <td><input class="desc" list="itemList" autocomplete="off" onchange="autoCaptureItem(this)"></td>
     <td><input class="num qty" oninput="recalc()"></td>
     <td><input class="num price" oninput="recalc()"></td>
     <td class="amtcell amt">0.00</td>
@@ -780,6 +780,24 @@ async function loadMasters(){
 function custLookup(){
   const c=CUSTOMERS[$('custName').value.trim()];
   if(c){ $('custTIN').value=c.tin||''; $('custAddr').value=c.business_address||''; $('terms').value=c.terms||''; }
+}
+let _custTimer;
+function autoCaptureCustomer(){
+  if(!can.edit())return;
+  const name=$('custName').value.trim(); if(!name)return;
+  clearTimeout(_custTimer);
+  _custTimer=setTimeout(async()=>{
+    try{
+      await sb.from('pmai_customers').upsert({registered_name:name,tin:$('custTIN').value||null,business_address:$('custAddr').value||null,terms:$('terms').value||null,updated_at:new Date().toISOString()},{onConflict:'registered_name'});
+      await loadMasters();
+      setStatus('✓ Customer saved to database');
+    }catch(e){}
+  },600);
+}
+async function autoCaptureItem(input){
+  if(!can.edit())return;
+  const d=(input.value||'').trim(); if(!d)return;
+  try{ await sb.from('pmai_items').upsert([{description:d}],{onConflict:'description',ignoreDuplicates:true}); await loadMasters(); }catch(e){}
 }
 async function saveMastersFromInvoice(d){
   if(!can.edit())return;
