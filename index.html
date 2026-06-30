@@ -232,7 +232,7 @@
 <div id="calibPanel">
   <div class="cbar">
     <h2>Print Calibration <span style="font-size:11px;color:#a52a2a;font-weight:600">(Admin only — shared to all users)</span></h2>
-    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Alignment is sized to <strong>A4 (210 × 297 mm)</strong>. A column's position and the <strong>row spacing</strong> apply to all line rows. Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
+    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Alignment is sized to <strong>A4 (210 × 297 mm)</strong>. A column's position and the <strong>row spacing</strong> apply to all line rows. <strong>Drag an empty area</strong> to move the background image, or use <strong>Background zoom</strong> to scale it. Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
     <div class="ctrls">
       <div class="fld"><label for="cFont">Print font</label>
         <select id="cFont" onchange="calibChanged()">
@@ -255,6 +255,11 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgShow" checked onchange="toggleBg()"> Show form image</label></div>
       <div class="fld"><label>Lock text</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cLock" checked onchange="toggleLock()"> 🔒 Locked (password to unlock)</label></div>
+      <div class="fld"><label for="cBgZoom">Background zoom (%)</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="cBgZoom" value="100" step="2" style="width:80px" onchange="setBgZoom(this.value)">
+          <button onclick="resetBg2()" title="Reset background position & zoom">↺ pos</button>
+        </div></div>
       <div class="spacer">
         <button onclick="resetCalib()">↺ Reset fields</button>
         <button class="primary" onclick="saveCalib()">💾 Save (shared)</button>
@@ -397,7 +402,7 @@ const FONT_FAMILY = {helv:"Arial, Helvetica, sans-serif", times:"'Times New Roma
 
 function defaultCalib(){
   return {
-    font:'helv', sizePt:9, spacingMM:5.6,
+    font:'helv', sizePt:9, spacingMM:5.6, bgX:0, bgY:0, bgScale:100,
     fields:{
       date:{x:118,y:14}, cash:{x:26,y:16.5}, charge:{x:50,y:16.5},
       custName:{x:40,y:28}, custTIN:{x:40,y:34.5}, terms:{x:110,y:34.5}, custAddr:{x:40,y:40.5},
@@ -603,8 +608,30 @@ function openCalib(){
   cv.style.width=CW+'px'; cv.style.height=CH+'px';
   cv.style.backgroundImage='url('+(CALIB.bg||FORM_BG)+')';
   cv.style.fontFamily=FONT_FAMILY[CALIB.font];
+  if($('cBgZoom')) $('cBgZoom').value=CALIB.bgScale||100;
+  applyBg();
+  if(!cv.dataset.panbound){ cv.dataset.panbound='1'; bindBgPan(cv); }
   renderChips();
   $('calibPanel').style.display='block';
+}
+function applyBg(){
+  const cv=$('calibCanvas');
+  cv.style.backgroundRepeat='no-repeat';
+  cv.style.backgroundSize=(CALIB.bgScale||100)+'% auto';
+  cv.style.backgroundPosition=(CALIB.bgX||0)+'px '+(CALIB.bgY||0)+'px';
+}
+function setBgZoom(v){ CALIB.bgScale=parseFloat(v)||100; applyBg(); }
+function resetBg2(){ CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; if($('cBgZoom'))$('cBgZoom').value=100; applyBg(); }
+function bindBgPan(cv){
+  cv.addEventListener('pointerdown',e=>{
+    if(e.target!==cv) return; // only when dragging empty area, not a chip
+    e.preventDefault();
+    const sx=e.clientX, sy=e.clientY, ox=CALIB.bgX||0, oy=CALIB.bgY||0;
+    cv.setPointerCapture(e.pointerId);
+    const mv=ev=>{ CALIB.bgX=ox+(ev.clientX-sx); CALIB.bgY=oy+(ev.clientY-sy); applyBg(); };
+    const up=()=>{ cv.releasePointerCapture(e.pointerId); cv.removeEventListener('pointermove',mv); cv.removeEventListener('pointerup',up); };
+    cv.addEventListener('pointermove',mv); cv.addEventListener('pointerup',up);
+  });
 }
 function closeCalib(){ $('calibPanel').style.display='none'; }
 function renderChips(){
@@ -684,7 +711,8 @@ async function loadCalib(){
   const {data}=await sb.from('pmai_settings').select('value').eq('key','calibration').maybeSingle();
   const d=defaultCalib();
   if(data&&data.value&&data.value.fields){
-    CALIB={font:data.value.font||d.font,sizePt:data.value.sizePt||d.sizePt,spacingMM:data.value.spacingMM||d.spacingMM,fields:Object.assign(d.fields,data.value.fields),bg:data.value.bg||null};
+    const v=data.value;
+    CALIB={font:v.font||d.font,sizePt:v.sizePt||d.sizePt,spacingMM:v.spacingMM||d.spacingMM,fields:Object.assign(d.fields,v.fields),bg:v.bg||null,bgX:v.bgX||0,bgY:v.bgY||0,bgScale:v.bgScale||100};
   } else { CALIB=d; }
 }
 async function changeBg(input){
@@ -706,8 +734,9 @@ async function changeBg(input){
       dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(file);});
     } else { if(m){m.style.color='#a52a2a';m.textContent='Use a PDF or image file.';} return; }
     CALIB.bg=dataUrl;
-    $('calibCanvas').style.backgroundImage='url('+dataUrl+')';
-    if(m){m.style.color='#0b3d2e';m.textContent='✓ Background updated — drag fields to match, then Save.';}
+    CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; if($('cBgZoom'))$('cBgZoom').value=100;
+    $('calibCanvas').style.backgroundImage='url('+dataUrl+')'; applyBg();
+    if(m){m.style.color='#0b3d2e';m.textContent='✓ Background updated — drag empty area to position it, drag fields to match, then Save.';}
   }catch(e){ if(m){m.style.color='#a52a2a';m.textContent='⚠ '+e;} }
 }
 function resetBg(){ CALIB.bg=null; if($('cBgShow').checked)$('calibCanvas').style.backgroundImage='url('+FORM_BG+')'; const m=$('cBgMsg'); if(m){m.textContent='Reverted to the built-in form. Save to apply.';} }
