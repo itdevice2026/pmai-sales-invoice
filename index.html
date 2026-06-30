@@ -257,7 +257,19 @@
 <div class="modal" id="usersPanel">
   <div class="card">
     <h2>Users &amp; Roles</h2>
-    <p>Assign each account a role. Admin: full access + calibration. Encoder: create/edit/print. Viewer: view/print only. New accounts are created in Supabase &rarr; Authentication.</p>
+    <p>Admin: full access + calibration. Encoder: create/edit/print. Viewer: view/print only.</p>
+    <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;background:#f8fafc">
+      <strong style="font-size:13px;color:var(--brand)">Add a user</strong>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
+        <input id="auEmail" type="email" placeholder="email@meatplus.ph" style="flex:1;min-width:180px;padding:8px;border:1px solid #c4ccd4;border-radius:7px">
+        <input id="auPass" type="text" placeholder="password (min 6)" style="width:150px;padding:8px;border:1px solid #c4ccd4;border-radius:7px">
+        <select id="auRole" style="padding:8px;border:1px solid #c4ccd4;border-radius:7px">
+          <option value="viewer">viewer</option><option value="encoder">encoder</option><option value="admin">admin</option>
+        </select>
+        <button class="primary" onclick="adminCreateUser(this)">Create</button>
+      </div>
+      <div id="auMsg" style="font-size:12px;margin-top:6px"></div>
+    </div>
     <div id="usersBody">Loading…</div>
     <button class="primary" onclick="closeUsers()" style="margin-top:14px">Close</button>
   </div>
@@ -579,6 +591,26 @@ async function setRole(uid,role){
   const {error}=await sb.from('pmai_user_roles').update({role}).eq('user_id',uid);
   if(error){alert('Update failed: '+error.message);return;}
   setStatus('✓ Role updated');
+}
+async function adminCreateUser(btn){
+  const email=$('auEmail').value.trim().toLowerCase();
+  const password=$('auPass').value;
+  const role=$('auRole').value;
+  const m=$('auMsg');
+  if(!email||!email.includes('@')){m.style.color='#a52a2a';m.textContent='Enter a valid email.';return;}
+  if(password.length<6){m.style.color='#a52a2a';m.textContent='Password must be at least 6 characters.';return;}
+  if(btn){btn.disabled=true;btn.textContent='Creating…';}
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    const res=await fetch(SUPABASE_URL+'/functions/v1/pmai-admin',{method:'POST',
+      headers:{'Authorization':'Bearer '+session.access_token,'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({action:'create_user',email,password,role})});
+    const out=await res.json().catch(()=>({error:'Bad response ('+res.status+')'}));
+    if(!res.ok||out.error){ m.style.color='#a52a2a'; m.textContent='⚠ '+(out.error||res.status); }
+    else { m.style.color='#0b3d2e'; m.textContent='✓ Created '+email+' ('+role+')';
+      $('auEmail').value=''; $('auPass').value=''; openUsers(); }
+  }catch(e){ m.style.color='#a52a2a'; m.textContent='⚠ '+e; }
+  if(btn){btn.disabled=false;btn.textContent='Create';}
 }
 async function adminSetPassword(email,btn){
   if(!email)return;
