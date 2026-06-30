@@ -293,8 +293,11 @@
         <label style="font-size:12px">Digits <input id="numWidth" type="number" value="5" style="width:54px;padding:6px;border:1px solid #c4ccd4;border-radius:6px"></label>
         <button class="primary" onclick="addBooklet(this)">Add booklet</button>
       </div>
-      <div style="font-size:12px;color:#444;margin-top:8px">Who can use it — tick users (none ticked = Anyone):</div>
-      <div id="bkAssignList" style="display:flex;flex-wrap:wrap;gap:12px;max-height:96px;overflow:auto;border:1px solid #eee;border-radius:6px;padding:8px;margin-top:4px"></div>
+      <div style="font-size:12px;color:#444;margin-top:8px">Who can use it (none ticked = Anyone):</div>
+      <div style="position:relative;display:inline-block;margin-top:4px">
+        <button type="button" id="bkAssignBtn" onclick="bkToggle()" style="min-width:200px;text-align:left">Anyone ▾</button>
+        <div id="bkAssignList" onchange="bkUpdateBtn()" style="display:none;position:absolute;z-index:30;background:#fff;border:1px solid #c4ccd4;border-radius:8px;padding:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);max-height:220px;overflow:auto;min-width:240px"></div>
+      </div>
       <div id="bkBody" style="font-size:12px;margin-top:10px">Loading…</div>
     </div>
     <div id="dbMsg" style="font-size:12px;margin:6px 0"></div>
@@ -857,10 +860,17 @@ function userChecklistHtml(prefix, selSet){
   return DB_USERS.map(u=>`<label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="${prefix}${u.user_id}"${selSet&&selSet.has(u.user_id)?' checked':''}> ${(u.full_name||u.email||u.user_id).replace(/</g,'&lt;')}</label>`).join('');
 }
 function checkedUids(prefix){ return DB_USERS.filter(u=>{const e=$(prefix+u.user_id);return e&&e.checked;}).map(u=>u.user_id); }
+function bkToggle(){ const p=$('bkAssignList'); p.style.display=(p.style.display==='block')?'none':'block'; }
+function bkUpdateBtn(){
+  const ids=checkedUids('bka_');
+  const btn=$('bkAssignBtn'); if(!btn)return;
+  btn.textContent=(ids.length? (ids.length===1? userName(ids[0]) : ids.length+' users selected') : 'Anyone')+' ▾';
+}
+document.addEventListener('click',e=>{ const w=$('bkAssignBtn'); const p=$('bkAssignList'); if(w&&p&&!w.contains(e.target)&&!p.contains(e.target)) p.style.display='none'; });
 async function loadDbUsers(){
   const {data}=await sb.from('pmai_user_roles').select('user_id,email,full_name').order('email');
   DB_USERS=data||[];
-  if($('bkAssignList')) $('bkAssignList').innerHTML=userChecklistHtml('bka_',null);
+  if($('bkAssignList')){ $('bkAssignList').innerHTML=userChecklistHtml('bka_',null); bkUpdateBtn(); }
 }
 async function addBooklet(btn){
   const label=$('bkLabel').value.trim();
