@@ -707,7 +707,7 @@ async function setName(uid,email,name){
   const {error}=await sb.from('pmai_user_roles').update({full_name:name}).eq('user_id',uid);
   const m=$('usersMsg');
   if(error){ if(m){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;} return; }
-  if(m){m.style.color='#0b3d2e';m.textContent='✓ Name saved for '+(email||uid)+'. (Assign a role first if it didn\\'t stick.)';}
+  if(m){m.style.color='#0b3d2e';m.textContent='✓ Name saved for '+(email||uid)+'. (Assign a role first if it did not stick.)';}
 }
 async function adminSetPassword(email,btn){
   if(!email)return;
