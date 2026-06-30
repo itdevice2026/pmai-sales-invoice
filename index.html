@@ -245,9 +245,13 @@
         <input type="number" id="cSpace" step="0.1" value="5.6" onchange="calibChanged()"></div>
       <div class="fld"><label for="cBg">Background (PDF / image of the form)</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input type="file" id="cBg" accept="application/pdf,image/*" onchange="changeBg(this)" style="min-width:200px">
+          <input type="file" id="cBg" accept="application/pdf,image/*" onchange="changeBg(this)" style="min-width:180px">
           <button onclick="resetBg()" title="Revert to built-in form">↺</button>
         </div></div>
+      <div class="fld"><label>Show background</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgShow" checked onchange="toggleBg()"> Show form image</label></div>
+      <div class="fld"><label>Lock text</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cLock" onchange="toggleLock()"> 🔒 Lock dragging</label></div>
       <div class="spacer">
         <button onclick="resetCalib()">↺ Reset fields</button>
         <button class="primary" onclick="saveCalib()">💾 Save (shared)</button>
@@ -507,6 +511,7 @@ function chipFontPx(){ return (CALIB.sizePt*0.352778*S); }
 function openCalib(){
   if(!can.calib()){alert('Only an Admin can change Print Calibration.');return;}
   $('cFont').value=CALIB.font; $('cSize').value=CALIB.sizePt; $('cSpace').value=CALIB.spacingMM;
+  $('cLock').checked=DRAG_LOCKED; $('cBgShow').checked=true;
   const cv=$('calibCanvas');
   cv.style.width=CW+'px'; cv.style.height=CH+'px';
   cv.style.backgroundImage='url('+(CALIB.bg||FORM_BG)+')';
@@ -525,6 +530,7 @@ function renderChips(){
     const c=document.createElement('div');
     c.className='chip'; c.dataset.key=key; c.textContent=sample; c.title=label;
     c.style.left=(pos.x*S)+'px'; c.style.top=(pos.y*S)+'px'; c.style.fontSize=fpx+'px';
+    c.style.cursor=DRAG_LOCKED?'default':'grab';
     attachDrag(c); cv.appendChild(c);
   });
   renderGhosts();
@@ -544,8 +550,15 @@ function renderGhosts(){
     });
   }
 }
+let DRAG_LOCKED=false;
+function toggleLock(){
+  DRAG_LOCKED=$('cLock').checked;
+  document.querySelectorAll('#calibCanvas .chip:not(.ghost)').forEach(c=>{ c.style.cursor=DRAG_LOCKED?'default':'grab'; });
+  const m=$('cBgMsg'); if(m){m.style.color='#666';m.textContent=DRAG_LOCKED?'🔒 Text locked — drag disabled.':'🔓 Text unlocked — you can drag fields.';}
+}
 function attachDrag(el){
   el.addEventListener('pointerdown',e=>{
+    if(DRAG_LOCKED)return;
     e.preventDefault();
     const cv=$('calibCanvas'), rect=cv.getBoundingClientRect();
     const offX=e.clientX-(rect.left+el.offsetLeft), offY=e.clientY-(rect.top+el.offsetTop);
@@ -601,7 +614,12 @@ async function changeBg(input){
     if(m){m.style.color='#0b3d2e';m.textContent='✓ Background updated — drag fields to match, then Save.';}
   }catch(e){ if(m){m.style.color='#a52a2a';m.textContent='⚠ '+e;} }
 }
-function resetBg(){ CALIB.bg=null; $('calibCanvas').style.backgroundImage='url('+FORM_BG+')'; const m=$('cBgMsg'); if(m){m.textContent='Reverted to the built-in form. Save to apply.';} }
+function resetBg(){ CALIB.bg=null; if($('cBgShow').checked)$('calibCanvas').style.backgroundImage='url('+FORM_BG+')'; const m=$('cBgMsg'); if(m){m.textContent='Reverted to the built-in form. Save to apply.';} }
+function toggleBg(){
+  const on=$('cBgShow').checked;
+  const cv=$('calibCanvas');
+  cv.style.backgroundImage = on ? 'url('+(CALIB.bg||FORM_BG)+')' : 'none';
+}
 
 /* ===== users (admin) ===== */
 async function openUsers(){
