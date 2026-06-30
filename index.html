@@ -150,6 +150,7 @@
     <select id="savedList" onchange="loadSelected()" title="Saved invoices"><option value="">— Loading… —</option></select>
     <button id="btnPrint" onclick="doPrint()">🖨 Print on form</button>
     <button id="btnTxn" onclick="openTxn()">📋 Transactions</button>
+    <button id="btnDb" onclick="openDb()">📇 Database</button>
     <button id="btnCalib" onclick="openCalib()">🎯 Print Calibration</button>
     <button id="btnUsers" onclick="openUsers()">👥 Users</button>
     <button class="danger" id="btnDel" onclick="deleteCurrent()">🗑 Delete</button>
@@ -181,7 +182,7 @@
     </div>
     <table class="soldto">
       <tr><td class="stitle" colspan="2">SOLD TO:</td></tr>
-      <tr><td class="k">Registered Name</td><td><input id="custName"></td></tr>
+      <tr><td class="k">Registered Name</td><td><input id="custName" list="custList" autocomplete="off" onchange="custLookup()"></td></tr>
       <tr><td class="k">TIN</td><td><div style="display:flex"><input id="custTIN" style="flex:1"><span style="border-left:1px solid #000;padding:6px 8px;font-weight:700;white-space:nowrap">Terms:</span><input id="terms" style="flex:1"></div></td></tr>
       <tr><td class="k">Business Address</td><td><input id="custAddr"></td></tr>
     </table>
@@ -262,6 +263,30 @@
     <div id="cBgMsg" style="font-size:12px;color:#666;margin-top:6px"></div>
   </div>
   <div class="canvasWrap"><div id="calibCanvas"></div></div>
+</div>
+
+<datalist id="custList"></datalist>
+<datalist id="itemList"></datalist>
+
+<!-- CUSTOMER / ITEM DATABASE -->
+<div class="modal" id="dbPanel">
+  <div class="card" style="width:620px;max-width:95vw;max-height:85vh;overflow:auto">
+    <h2>Customer &amp; Item Database</h2>
+    <p>These build up automatically as you save invoices, and power the auto-fill suggestions. You can also bulk-upload lists via CSV.</p>
+    <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;background:#f8fafc">
+      <strong style="font-size:13px;color:var(--brand)">Upload customers (CSV)</strong>
+      <div style="font-size:11px;color:#666;margin:4px 0">Columns: <code>registered_name, tin, business_address, terms</code> (first row = headers).</div>
+      <input type="file" id="dbCustFile" accept=".csv,text/csv" onchange="importCsv(this,'customers')">
+    </div>
+    <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;background:#f8fafc">
+      <strong style="font-size:13px;color:var(--brand)">Upload items / services (CSV)</strong>
+      <div style="font-size:11px;color:#666;margin:4px 0">Column: <code>description</code> (one per row; first row = header).</div>
+      <input type="file" id="dbItemFile" accept=".csv,text/csv" onchange="importCsv(this,'items')">
+    </div>
+    <div id="dbMsg" style="font-size:12px;margin:6px 0"></div>
+    <div id="dbBody" style="font-size:12.5px"></div>
+    <button class="primary" onclick="closeDb()" style="margin-top:12px">Close</button>
+  </div>
 </div>
 
 <!-- TRANSACTIONS -->
@@ -397,13 +422,14 @@ async function afterLogin(){
   $('who').textContent=(ME?ME.email:'')+' · '+ROLE.toUpperCase();
   applyRoleUI();
   await loadCalib();
+  await loadMasters();
   await refreshList();
   newInvoice();
 }
 function applyRoleUI(){
   const show=(id,on)=>{ const e=$(id); if(e) e.style.display=on?'':'none'; };
   show('btnNew',can.edit()); show('btnSave',can.edit()); show('btnDel',can.del());
-  show('btnCalib',can.calib()); show('btnUsers',can.users()); show('btnAddRow',can.edit());
+  show('btnCalib',can.calib()); show('btnUsers',can.users()); show('btnAddRow',can.edit()); show('btnDb',can.edit());
   $('hintBar').innerHTML = ROLE==='viewer'
     ? 'You are signed in as <strong>Viewer</strong> — you can open and print invoices. Editing and calibration are restricted.'
     : (ROLE==='encoder'
@@ -421,7 +447,7 @@ function setReadonly(ro){
 function addRow(data){
   const tr=document.createElement('tr');
   tr.innerHTML=`
-    <td><input class="desc"></td>
+    <td><input class="desc" list="itemList" autocomplete="off"></td>
     <td><input class="num qty" oninput="recalc()"></td>
     <td><input class="num price" oninput="recalc()"></td>
     <td class="amtcell amt">0.00</td>
@@ -738,6 +764,78 @@ async function adminResetPassword(email,btn){
   if(btn){btn.disabled=false;btn.textContent='Reset password';}
 }
 
+/* ===== customer / item master database ===== */
+let CUSTOMERS={};
+async function loadMasters(){
+  const [{data:cust},{data:items}]=await Promise.all([
+    sb.from('pmai_customers').select('registered_name,tin,business_address,terms').order('registered_name'),
+    sb.from('pmai_items').select('description').order('description')
+  ]);
+  CUSTOMERS={};
+  const cl=$('custList'); cl.innerHTML='';
+  (cust||[]).forEach(c=>{ CUSTOMERS[c.registered_name]=c; const o=document.createElement('option'); o.value=c.registered_name; cl.appendChild(o); });
+  const il=$('itemList'); il.innerHTML='';
+  (items||[]).forEach(i=>{ const o=document.createElement('option'); o.value=i.description; il.appendChild(o); });
+}
+function custLookup(){
+  const c=CUSTOMERS[$('custName').value.trim()];
+  if(c){ $('custTIN').value=c.tin||''; $('custAddr').value=c.business_address||''; $('terms').value=c.terms||''; }
+}
+async function saveMastersFromInvoice(d){
+  if(!can.edit())return;
+  try{
+    const name=(d.cust_name||'').trim();
+    if(name){ await sb.from('pmai_customers').upsert({registered_name:name,tin:d.cust_tin||null,business_address:d.cust_addr||null,terms:d.terms||null,updated_at:new Date().toISOString()},{onConflict:'registered_name'}); }
+    const descs=[...new Set((d.items||[]).map(i=>(i.desc||'').trim()).filter(Boolean))];
+    if(descs.length){ await sb.from('pmai_items').upsert(descs.map(x=>({description:x})),{onConflict:'description',ignoreDuplicates:true}); }
+    await loadMasters();
+  }catch(e){ /* non-fatal */ }
+}
+function openDb(){
+  if(!can.edit()){alert('Only Admin/Encoder can manage the database.');return;}
+  $('dbPanel').style.display='flex'; $('dbMsg').textContent='';
+  $('dbBody').textContent='Customers: '+Object.keys(CUSTOMERS).length+' · Items: '+$('itemList').children.length;
+}
+function closeDb(){ $('dbPanel').style.display='none'; }
+function parseCsv(text){
+  const rows=[]; let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else { if(ch==='"')q=true; else if(ch===','){row.push(cur);cur='';} else if(ch==='\n'){row.push(cur);rows.push(row);row=[];cur='';} else if(ch!=='\r')cur+=ch; }
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(r=>r.some(c=>String(c).trim()!==''));
+}
+async function importCsv(input,type){
+  const file=input.files&&input.files[0]; if(!file)return;
+  const m=$('dbMsg'); m.style.color='#666'; m.textContent='Reading…';
+  try{
+    const text=await file.text();
+    const rows=parseCsv(text); if(rows.length<2){m.style.color='#a52a2a';m.textContent='No data rows found.';return;}
+    const hdr=rows[0].map(h=>h.trim().toLowerCase());
+    const idx=n=>hdr.indexOf(n);
+    let payload;
+    if(type==='customers'){
+      const ni=idx('registered_name')>=0?idx('registered_name'):0;
+      const ti=idx('tin'), bi=idx('business_address'), te=idx('terms');
+      payload=rows.slice(1).map(r=>({registered_name:(r[ni]||'').trim(),tin:ti>=0?(r[ti]||'').trim():null,business_address:bi>=0?(r[bi]||'').trim():null,terms:te>=0?(r[te]||'').trim():null})).filter(x=>x.registered_name);
+      if(!payload.length){m.style.color='#a52a2a';m.textContent='No registered_name values found.';return;}
+      const {error}=await sb.from('pmai_customers').upsert(payload,{onConflict:'registered_name'});
+      if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;return;}
+    } else {
+      const di=idx('description')>=0?idx('description'):0;
+      payload=[...new Set(rows.slice(1).map(r=>(r[di]||'').trim()).filter(Boolean))].map(x=>({description:x}));
+      if(!payload.length){m.style.color='#a52a2a';m.textContent='No descriptions found.';return;}
+      const {error}=await sb.from('pmai_items').upsert(payload,{onConflict:'description',ignoreDuplicates:true});
+      if(error){m.style.color='#a52a2a';m.textContent='⚠ '+error.message;return;}
+    }
+    await loadMasters();
+    m.style.color='#0b3d2e'; m.textContent='✓ Imported '+payload.length+' '+type+'.';
+    $('dbBody').textContent='Customers: '+Object.keys(CUSTOMERS).length+' · Items: '+$('itemList').children.length;
+    input.value='';
+  }catch(e){ m.style.color='#a52a2a'; m.textContent='⚠ '+e; }
+}
+
 /* ===== transactions list ===== */
 let TXN=[];
 function fmtTs(t){ if(!t)return ''; const d=new Date(t); return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
@@ -854,6 +952,7 @@ async function saveInvoice(){
   const {error}=await sb.from('pmai_invoices').upsert(d,{onConflict:'invoice_no'});
   if(error){setStatus('⚠ '+error.message);alert('Save failed: '+error.message);return;}
   await refreshList(d.invoice_no);
+  saveMastersFromInvoice(d);
   setStatus('✓ Saved No. '+d.invoice_no+' · '+new Date().toLocaleTimeString());
 }
 function loadSelected(){ const no=$('savedList').value; if(!no)return; if(CACHE[no])apply(CACHE[no]); }
