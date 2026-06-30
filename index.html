@@ -73,13 +73,13 @@
 
   /* Print overlay (data only, sized to the pre-printed 165x200mm invoice) */
   #printRoot{display:none;}
-  #overlay{position:relative;width:165mm;height:200mm;}
+  #overlay{position:relative;width:210mm;height:297mm;}
   #overlay .f{position:absolute;color:#000;white-space:nowrap;}
   @media print{
     .app,#calibPanel,#loginPanel,#usersPanel{display:none !important;}
     #printRoot{display:block !important;}
     html,body{background:#fff;margin:0;}
-    @page{size:165mm 200mm;margin:0;}
+    @page{size:A4;margin:0;}
   }
 
   /* Calibration panel */
@@ -229,7 +229,7 @@
 <div id="calibPanel">
   <div class="cbar">
     <h2>Print Calibration <span style="font-size:11px;color:#a52a2a;font-weight:600">(Admin only — shared to all users)</span></h2>
-    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Alignment is sized to the real <strong>165 × 200 mm</strong> pre-printed Sales Invoice. A column's position and the <strong>row spacing</strong> apply to all line rows. Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
+    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Alignment is sized to <strong>A4 (210 × 297 mm)</strong>. A column's position and the <strong>row spacing</strong> apply to all line rows. Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
     <div class="ctrls">
       <div class="fld"><label for="cFont">Print font</label>
         <select id="cFont" onchange="calibChanged()">
@@ -302,7 +302,7 @@ const can = {
 };
 
 /* ===== page geometry (pre-printed Sales Invoice = 165 x 200 mm) ===== */
-const PAGE_W = 165, PAGE_H = 200;
+const PAGE_W = 210, PAGE_H = 297;
 const CW = 760, S = CW/PAGE_W, CH = PAGE_H*S;
 const FONT_FAMILY = {helv:"Arial, Helvetica, sans-serif", times:"'Times New Roman', Times, serif", courier:"'Courier New', Courier, monospace"};
 
