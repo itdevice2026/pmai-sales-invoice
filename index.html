@@ -263,6 +263,8 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cLock" checked onchange="toggleLock()"> 🔒 Locked (password to unlock)</label></div>
       <div class="fld"><label>Move background</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgMove" onchange="toggleBgMove()"> ✋ Drag to move image</label></div>
+      <div class="fld"><label>Resize background</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgResize" onchange="toggleBgResize()"> ⤡ Drag corner to resize image</label></div>
       <div class="fld"><label for="cBgZoom">Background zoom (%)</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="number" id="cBgZoom" value="100" step="2" style="width:80px" onchange="setBgZoom(this.value)">
@@ -637,8 +639,9 @@ function openCalib(){
   if($('cBgH')) $('cBgH').value=CALIB.bgH||100;
   applyBg();
   renderChips();
-  ensureMover();
+  ensureMover(); ensureResizer();
   if($('cBgMove')){ $('cBgMove').checked=false; toggleBgMove(); }
+  if($('cBgResize')){ $('cBgResize').checked=false; toggleBgResize(); }
   $('calibPanel').style.display='block';
 }
 function applyBg(){
@@ -648,6 +651,14 @@ function applyBg(){
   cv.style.backgroundRepeat='no-repeat';
   cv.style.backgroundSize=w+'% '+h+'%';
   cv.style.backgroundPosition=(CALIB.bgX||0)+'px '+(CALIB.bgY||0)+'px';
+  positionResizer();
+}
+function positionResizer(){
+  const rz=$('bgResizer'); if(!rz) return;
+  const z=(CALIB.bgScale||100)/100;
+  const wpx=(CALIB.bgW||100)/100*z*CW, hpx=(CALIB.bgH||100)/100*z*CH;
+  rz.style.left=((CALIB.bgX||0)+wpx-16)+'px';
+  rz.style.top=((CALIB.bgY||0)+hpx-16)+'px';
 }
 function setPageSize(){
   CALIB.pageW=parseFloat($('cPageW').value)||165;
@@ -668,6 +679,35 @@ function ensureMover(){
   return mv;
 }
 function toggleBgMove(){ const on=$('cBgMove').checked; ensureMover().style.display=on?'block':'none'; }
+function ensureResizer(){
+  const cv=$('calibCanvas');
+  let rz=$('bgResizer');
+  if(!rz){ rz=document.createElement('div'); rz.id='bgResizer';
+    rz.style.cssText='position:absolute;width:32px;height:32px;z-index:60;display:none;cursor:nwse-resize;background:#2563eb;border:2px solid #fff;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.4);touch-action:none';
+    rz.title='Drag to resize the form image';
+    cv.appendChild(rz); bindBgResize(rz); }
+  return rz;
+}
+function toggleBgResize(){ const on=$('cBgResize').checked; ensureResizer().style.display=on?'block':'none'; if(on) positionResizer(); }
+function bindBgResize(el){
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault(); e.stopPropagation();
+    const cv=$('calibCanvas'); const r=cv.getBoundingClientRect();
+    const z=(CALIB.bgScale||100)/100;
+    try{el.setPointerCapture(e.pointerId);}catch(_){}
+    const mv=ev=>{
+      const px=ev.clientX-r.left, py=ev.clientY-r.top;
+      let wpx=px-(CALIB.bgX||0), hpx=py-(CALIB.bgY||0);
+      if(wpx<20)wpx=20; if(hpx<20)hpx=20;
+      CALIB.bgW=Math.round(wpx/(z*CW)*100);
+      CALIB.bgH=Math.round(hpx/(z*CH)*100);
+      if($('cBgW'))$('cBgW').value=CALIB.bgW; if($('cBgH'))$('cBgH').value=CALIB.bgH;
+      applyBg();
+    };
+    const up=()=>{ try{el.releasePointerCapture(e.pointerId);}catch(_){} el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up); };
+    el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
+  });
+}
 function bindBgPan(el){
   el.addEventListener('pointerdown',e=>{
     e.preventDefault();
