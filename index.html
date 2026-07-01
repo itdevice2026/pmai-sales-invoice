@@ -252,6 +252,12 @@
           <input type="number" id="cPageW" value="165" step="1" style="width:64px" onchange="setPageSize()"> ×
           <input type="number" id="cPageH" value="200" step="1" style="width:64px" onchange="setPageSize()">
         </div></div>
+      <div class="fld"><label>Image size (mm)</label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="number" id="cBgWmm" step="1" style="width:64px" onchange="setBgMM()" title="Actual width of the form image, in mm"> ×
+          <input type="number" id="cBgHmm" step="1" style="width:64px" onchange="setBgMM()" title="Actual height of the form image, in mm">
+          <button onclick="fitBgToPage()" title="Match image size to page size">⤢ Fit page</button>
+        </div></div>
       <div class="fld"><label for="cBg">Background (PDF / image of the form)</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="file" id="cBg" accept="application/pdf,image/*" onchange="changeBg(this)" style="min-width:180px">
@@ -268,13 +274,6 @@
       <div class="fld"><label>Crop background</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgCrop" onchange="toggleBgCrop()"> ✂ Drag a box to crop image</label>
         <button onclick="applyCrop()" id="cCropApply" style="margin-top:2px;display:none">✂ Apply crop</button></div>
-      <div class="fld"><label for="cBgWmm">Background size (mm) — Width × Height</label>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="number" id="cBgWmm" step="1" style="width:70px" onchange="setBgMM()" title="Actual width of the form image, in mm">
-          <span>×</span>
-          <input type="number" id="cBgHmm" step="1" style="width:70px" onchange="setBgMM()" title="Actual height of the form image, in mm">
-          <button onclick="fitBgToPage()" title="Set image size to the page size">⤢ Fit page</button>
-        </div></div>
       <div class="fld"><label for="cBgZoom">Background zoom (%)</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="number" id="cBgZoom" value="100" step="2" style="width:80px" onchange="setBgZoom(this.value)">
