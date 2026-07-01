@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PMAI Sales Invoice System</title>
+<style id="pageStyle">@page{size:165mm 200mm;margin:0}</style>
 <style>
   :root{--ink:#1a1a1a;--muted:#666;--accent:#c0392b;--bg:#eef1f4;--panel:#fff;--brand:#0b3d2e;--chip:#fde68a;--chipbd:#d4a017;}
   *{box-sizing:border-box;}
@@ -73,13 +74,13 @@
 
   /* Print overlay (data only, sized to the pre-printed 165x200mm invoice) */
   #printRoot{display:none;}
-  #overlay{position:relative;width:210mm;height:297mm;}
+  #overlay{position:relative;width:165mm;height:200mm;}
   #overlay .f{position:absolute;color:#000;white-space:nowrap;}
   @media print{
     .app,#calibPanel,#loginPanel,#usersPanel{display:none !important;}
     #printRoot{display:block !important;}
     html,body{background:#fff;margin:0;}
-    @page{size:A4;margin:0;}
+    @page{margin:0;}
   }
 
   /* Calibration panel */
@@ -232,7 +233,7 @@
 <div id="calibPanel">
   <div class="cbar">
     <h2>Print Calibration <span style="font-size:11px;color:#a52a2a;font-weight:600">(Admin only — shared to all users)</span></h2>
-    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Alignment is sized to <strong>A4 (210 × 297 mm)</strong>. A column's position and the <strong>row spacing</strong> apply to all line rows. Tick <strong>“Move background”</strong> then drag to reposition the form image, or use <strong>Background zoom</strong> to scale it (untick to drag fields again). Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
+    <div class="desc">Drag <strong>every highlighted field</strong> onto its place on the scanned invoice. Set <strong>Page size</strong> to match your actual pre-printed form (default 165 × 200 mm) — the scan fills it exactly, so where you place text is exactly where it prints. A column's position and the <strong>row spacing</strong> apply to all line rows. Tick <strong>“Move background”</strong> then drag to reposition the form image, or use <strong>Background zoom</strong> to scale it (untick to drag fields again). Then <strong>Save</strong> — the settings are stored centrally and used by everyone.</div>
     <div class="ctrls">
       <div class="fld"><label for="cFont">Print font</label>
         <select id="cFont" onchange="calibChanged()">
@@ -246,6 +247,11 @@
         </select></div>
       <div class="fld"><label for="cSpace">Row spacing (mm)</label>
         <input type="number" id="cSpace" step="0.1" value="5.6" onchange="calibChanged()"></div>
+      <div class="fld"><label>Page size (mm)</label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="number" id="cPageW" value="165" step="1" style="width:64px" onchange="setPageSize()"> ×
+          <input type="number" id="cPageH" value="200" step="1" style="width:64px" onchange="setPageSize()">
+        </div></div>
       <div class="fld"><label for="cBg">Background (PDF / image of the form)</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="file" id="cBg" accept="application/pdf,image/*" onchange="changeBg(this)" style="min-width:180px">
@@ -398,13 +404,19 @@ const can = {
 };
 
 /* ===== page geometry (pre-printed Sales Invoice = 165 x 200 mm) ===== */
-const PAGE_W = 210, PAGE_H = 297;
-const CW = 760, S = CW/PAGE_W, CH = PAGE_H*S;
+const CW = 760;
+let PAGE_W = 165, PAGE_H = 200, S = CW/PAGE_W, CH = PAGE_H*S;
+function applyPageSize(){
+  PAGE_W = CALIB.pageW||165; PAGE_H = CALIB.pageH||200;
+  S = CW/PAGE_W; CH = PAGE_H*S;
+  const ps=document.getElementById('pageStyle'); if(ps) ps.textContent='@page{size:'+PAGE_W+'mm '+PAGE_H+'mm;margin:0}';
+  const ov=$('overlay'); if(ov){ ov.style.width=PAGE_W+'mm'; ov.style.height=PAGE_H+'mm'; }
+}
 const FONT_FAMILY = {helv:"Arial, Helvetica, sans-serif", times:"'Times New Roman', Times, serif", courier:"'Courier New', Courier, monospace"};
 
 function defaultCalib(){
   return {
-    font:'helv', sizePt:9, spacingMM:5.6, bgX:0, bgY:0, bgScale:100,
+    font:'helv', sizePt:9, spacingMM:5.6, bgX:0, bgY:0, bgScale:100, pageW:165, pageH:200,
     fields:{
       date:{x:118,y:14}, cash:{x:26,y:16.5}, charge:{x:50,y:16.5},
       custName:{x:40,y:28}, custTIN:{x:40,y:34.5}, terms:{x:110,y:34.5}, custAddr:{x:40,y:40.5},
@@ -557,6 +569,7 @@ function inWords(num){
 /* ===== print overlay ===== */
 function span(xmm,ymm,text){ if(text===''||text==null)return ''; return `<span class="f" style="left:${xmm}mm;top:${ymm}mm">${String(text).replace(/</g,'&lt;')}</span>`; }
 function buildOverlay(){
+  applyPageSize();
   const f=CALIB.fields, fam=FONT_FAMILY[CALIB.font]||FONT_FAMILY.helv, ov=$('overlay');
   ov.style.fontFamily=fam; ov.style.fontSize=CALIB.sizePt+'pt';
   let h='';
@@ -606,6 +619,8 @@ function openCalib(){
   if(!can.calib()){alert('Only an Admin can change Print Calibration.');return;}
   $('cFont').value=CALIB.font; $('cSize').value=CALIB.sizePt; $('cSpace').value=CALIB.spacingMM;
   DRAG_LOCKED=true; $('cLock').checked=true; $('cBgShow').checked=true;
+  applyPageSize();
+  if($('cPageW')) $('cPageW').value=PAGE_W; if($('cPageH')) $('cPageH').value=PAGE_H;
   const cv=$('calibCanvas');
   cv.style.width=CW+'px'; cv.style.height=CH+'px';
   cv.style.backgroundImage='url('+(CALIB.bg||FORM_BG)+')';
@@ -619,9 +634,17 @@ function openCalib(){
 }
 function applyBg(){
   const cv=$('calibCanvas');
+  const z=CALIB.bgScale||100;
   cv.style.backgroundRepeat='no-repeat';
-  cv.style.backgroundSize=(CALIB.bgScale||100)+'% auto';
+  cv.style.backgroundSize=z+'% '+z+'%';  // 100% = exact fill of the page area
   cv.style.backgroundPosition=(CALIB.bgX||0)+'px '+(CALIB.bgY||0)+'px';
+}
+function setPageSize(){
+  CALIB.pageW=parseFloat($('cPageW').value)||165;
+  CALIB.pageH=parseFloat($('cPageH').value)||200;
+  applyPageSize();
+  const cv=$('calibCanvas'); cv.style.width=CW+'px'; cv.style.height=CH+'px';
+  applyBg(); renderChips();
 }
 function setBgZoom(v){ CALIB.bgScale=parseFloat(v)||100; applyBg(); }
 function resetBg2(){ CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; if($('cBgZoom'))$('cBgZoom').value=100; applyBg(); }
@@ -721,7 +744,7 @@ async function loadCalib(){
   const d=defaultCalib();
   if(data&&data.value&&data.value.fields){
     const v=data.value;
-    CALIB={font:v.font||d.font,sizePt:v.sizePt||d.sizePt,spacingMM:v.spacingMM||d.spacingMM,fields:Object.assign(d.fields,v.fields),bg:v.bg||null,bgX:v.bgX||0,bgY:v.bgY||0,bgScale:v.bgScale||100};
+    CALIB={font:v.font||d.font,sizePt:v.sizePt||d.sizePt,spacingMM:v.spacingMM||d.spacingMM,fields:Object.assign(d.fields,v.fields),bg:v.bg||null,bgX:v.bgX||0,bgY:v.bgY||0,bgScale:v.bgScale||100,pageW:v.pageW||165,pageH:v.pageH||200};
   } else { CALIB=d; }
 }
 async function changeBg(input){
