@@ -265,17 +265,20 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgMove" onchange="toggleBgMove()"> ✋ Drag to move image</label></div>
       <div class="fld"><label>Resize background</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgResize" onchange="toggleBgResize()"> ⤡ Drag corner to resize image</label></div>
+      <div class="fld"><label>Crop background</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 0"><input type="checkbox" id="cBgCrop" onchange="toggleBgCrop()"> ✂ Drag a box to crop image</label>
+        <button onclick="applyCrop()" id="cCropApply" style="margin-top:2px;display:none">✂ Apply crop</button></div>
+      <div class="fld"><label for="cBgWmm">Background size (mm) — Width × Height</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="cBgWmm" step="1" style="width:70px" onchange="setBgMM()" title="Actual width of the form image, in mm">
+          <span>×</span>
+          <input type="number" id="cBgHmm" step="1" style="width:70px" onchange="setBgMM()" title="Actual height of the form image, in mm">
+          <button onclick="fitBgToPage()" title="Set image size to the page size">⤢ Fit page</button>
+        </div></div>
       <div class="fld"><label for="cBgZoom">Background zoom (%)</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="number" id="cBgZoom" value="100" step="2" style="width:80px" onchange="setBgZoom(this.value)">
-          <button onclick="resetBg2()" title="Reset background position & size">↺ pos</button>
-        </div></div>
-      <div class="fld"><label for="cBgW">Background size — Width % × Height %</label>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="number" id="cBgW" value="100" step="1" style="width:70px" onchange="setBgWH()" title="Width of the form image (% of page)">
-          <span>×</span>
-          <input type="number" id="cBgH" value="100" step="1" style="width:70px" onchange="setBgWH()" title="Height of the form image (% of page)">
-          <button onclick="lockBgAspect()" id="cBgAspBtn" title="Match height to width (keep aspect)">⇔ equal</button>
+          <button onclick="resetBg2()" title="Reset background position, size & zoom">↺ pos</button>
         </div></div>
       <div class="spacer">
         <button onclick="resetCalib()">↺ Reset fields</button>
@@ -425,7 +428,7 @@ const FONT_FAMILY = {helv:"Arial, Helvetica, sans-serif", times:"'Times New Roma
 
 function defaultCalib(){
   return {
-    font:'helv', sizePt:9, spacingMM:5.6, bgX:0, bgY:0, bgScale:100, bgW:100, bgH:100, pageW:165, pageH:200,
+    font:'helv', sizePt:9, spacingMM:5.6, bgX:0, bgY:0, bgScale:100, bgWmm:0, bgHmm:0, pageW:165, pageH:200,
     fields:{
       date:{x:118,y:14}, cash:{x:26,y:16.5}, charge:{x:50,y:16.5},
       custName:{x:40,y:28}, custTIN:{x:40,y:34.5}, terms:{x:110,y:34.5}, custAddr:{x:40,y:40.5},
@@ -635,30 +638,34 @@ function openCalib(){
   cv.style.backgroundImage='url('+(CALIB.bg||FORM_BG)+')';
   cv.style.fontFamily=FONT_FAMILY[CALIB.font];
   if($('cBgZoom')) $('cBgZoom').value=CALIB.bgScale||100;
-  if($('cBgW')) $('cBgW').value=CALIB.bgW||100;
-  if($('cBgH')) $('cBgH').value=CALIB.bgH||100;
+  if($('cBgWmm')) $('cBgWmm').value=(CALIB.bgWmm>0?CALIB.bgWmm:PAGE_W);
+  if($('cBgHmm')) $('cBgHmm').value=(CALIB.bgHmm>0?CALIB.bgHmm:PAGE_H);
   applyBg();
   renderChips();
-  ensureMover(); ensureResizer();
+  ensureMover(); ensureResizer(); ensureCropper();
   if($('cBgMove')){ $('cBgMove').checked=false; toggleBgMove(); }
   if($('cBgResize')){ $('cBgResize').checked=false; toggleBgResize(); }
+  if($('cBgCrop')){ $('cBgCrop').checked=false; toggleBgCrop(); }
   $('calibPanel').style.display='block';
+}
+function bgPx(){  // rendered size of the form image in canvas px
+  const z=(CALIB.bgScale||100)/100;
+  const wmm=(CALIB.bgWmm>0?CALIB.bgWmm:PAGE_W), hmm=(CALIB.bgHmm>0?CALIB.bgHmm:PAGE_H);
+  return {w:wmm*S*z, h:hmm*S*z};
 }
 function applyBg(){
   const cv=$('calibCanvas');
-  const z=(CALIB.bgScale||100)/100;
-  const w=(CALIB.bgW||100)*z, h=(CALIB.bgH||100)*z;  // 100% = exact fill of the page area
+  const p=bgPx();
   cv.style.backgroundRepeat='no-repeat';
-  cv.style.backgroundSize=w+'% '+h+'%';
+  cv.style.backgroundSize=p.w+'px '+p.h+'px';
   cv.style.backgroundPosition=(CALIB.bgX||0)+'px '+(CALIB.bgY||0)+'px';
   positionResizer();
 }
 function positionResizer(){
   const rz=$('bgResizer'); if(!rz) return;
-  const z=(CALIB.bgScale||100)/100;
-  const wpx=(CALIB.bgW||100)/100*z*CW, hpx=(CALIB.bgH||100)/100*z*CH;
-  rz.style.left=((CALIB.bgX||0)+wpx-16)+'px';
-  rz.style.top=((CALIB.bgY||0)+hpx-16)+'px';
+  const p=bgPx();
+  rz.style.left=((CALIB.bgX||0)+p.w-16)+'px';
+  rz.style.top=((CALIB.bgY||0)+p.h-16)+'px';
 }
 function setPageSize(){
   CALIB.pageW=parseFloat($('cPageW').value)||165;
@@ -668,10 +675,11 @@ function setPageSize(){
   applyBg(); renderChips();
 }
 function setBgZoom(v){ CALIB.bgScale=parseFloat(v)||100; applyBg(); }
-function setBgWH(){ CALIB.bgW=parseFloat($('cBgW').value)||100; CALIB.bgH=parseFloat($('cBgH').value)||100; applyBg(); }
-function lockBgAspect(){ CALIB.bgH=CALIB.bgW=parseFloat($('cBgW').value)||100; if($('cBgH'))$('cBgH').value=CALIB.bgH; applyBg(); }
-function resetBg2(){ CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; CALIB.bgW=100; CALIB.bgH=100;
-  if($('cBgZoom'))$('cBgZoom').value=100; if($('cBgW'))$('cBgW').value=100; if($('cBgH'))$('cBgH').value=100; applyBg(); }
+function setBgMM(){ CALIB.bgWmm=parseFloat($('cBgWmm').value)||0; CALIB.bgHmm=parseFloat($('cBgHmm').value)||0; applyBg(); }
+function fitBgToPage(){ CALIB.bgWmm=PAGE_W; CALIB.bgHmm=PAGE_H;
+  if($('cBgWmm'))$('cBgWmm').value=PAGE_W; if($('cBgHmm'))$('cBgHmm').value=PAGE_H; applyBg(); }
+function resetBg2(){ CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; CALIB.bgWmm=PAGE_W; CALIB.bgHmm=PAGE_H;
+  if($('cBgZoom'))$('cBgZoom').value=100; if($('cBgWmm'))$('cBgWmm').value=PAGE_W; if($('cBgHmm'))$('cBgHmm').value=PAGE_H; applyBg(); }
 function ensureMover(){
   const cv=$('calibCanvas');
   let mv=$('bgMover');
@@ -699,14 +707,78 @@ function bindBgResize(el){
       const px=ev.clientX-r.left, py=ev.clientY-r.top;
       let wpx=px-(CALIB.bgX||0), hpx=py-(CALIB.bgY||0);
       if(wpx<20)wpx=20; if(hpx<20)hpx=20;
-      CALIB.bgW=Math.round(wpx/(z*CW)*100);
-      CALIB.bgH=Math.round(hpx/(z*CH)*100);
-      if($('cBgW'))$('cBgW').value=CALIB.bgW; if($('cBgH'))$('cBgH').value=CALIB.bgH;
+      CALIB.bgWmm=Math.round(wpx/(S*z));
+      CALIB.bgHmm=Math.round(hpx/(S*z));
+      if($('cBgWmm'))$('cBgWmm').value=CALIB.bgWmm; if($('cBgHmm'))$('cBgHmm').value=CALIB.bgHmm;
       applyBg();
     };
     const up=()=>{ try{el.releasePointerCapture(e.pointerId);}catch(_){} el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up); };
     el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
   });
+}
+let CROP=null;
+function ensureCropper(){
+  const cv=$('calibCanvas');
+  let layer=$('bgCropLayer');
+  if(!layer){
+    layer=document.createElement('div'); layer.id='bgCropLayer';
+    layer.style.cssText='position:absolute;inset:0;z-index:70;display:none;cursor:crosshair;touch-action:none';
+    const sel=document.createElement('div'); sel.id='bgCropSel';
+    sel.style.cssText='position:absolute;border:2px dashed #dc2626;background:rgba(220,38,38,.12);display:none;pointer-events:none';
+    layer.appendChild(sel);
+    cv.appendChild(layer); bindCrop(layer);
+  }
+  return layer;
+}
+function toggleBgCrop(){
+  const on=$('cBgCrop').checked;
+  ensureCropper().style.display=on?'block':'none';
+  if($('cCropApply')) $('cCropApply').style.display=on?'inline-block':'none';
+  if(!on){ CROP=null; const s=$('bgCropSel'); if(s)s.style.display='none'; }
+}
+function bindCrop(layer){
+  layer.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    const r=layer.getBoundingClientRect();
+    const sx=e.clientX-r.left, sy=e.clientY-r.top;
+    const sel=$('bgCropSel'); sel.style.display='block';
+    try{layer.setPointerCapture(e.pointerId);}catch(_){}
+    const mv=ev=>{
+      const x=ev.clientX-r.left, y=ev.clientY-r.top;
+      const left=Math.min(sx,x), top=Math.min(sy,y), w=Math.abs(x-sx), h=Math.abs(y-sy);
+      sel.style.left=left+'px'; sel.style.top=top+'px'; sel.style.width=w+'px'; sel.style.height=h+'px';
+      CROP={x:left,y:top,w:w,h:h};
+    };
+    const up=()=>{ try{layer.releasePointerCapture(e.pointerId);}catch(_){} layer.removeEventListener('pointermove',mv); layer.removeEventListener('pointerup',up); };
+    layer.addEventListener('pointermove',mv); layer.addEventListener('pointerup',up);
+  });
+}
+function applyCrop(){
+  if(!CROP||CROP.w<8||CROP.h<8){ alert('Draw a crop box on the image first.'); return; }
+  const p=bgPx();
+  const imgL=CALIB.bgX||0, imgT=CALIB.bgY||0, imgW=p.w, imgH=p.h;
+  const box={x:CROP.x,y:CROP.y,w:CROP.w,h:CROP.h};
+  const img=new Image();
+  img.onload=()=>{
+    const NW=img.naturalWidth, NH=img.naturalHeight;
+    let fx=(box.x-imgL)/imgW, fy=(box.y-imgT)/imgH, fw=box.w/imgW, fh=box.h/imgH;
+    if(fx<0){fw+=fx;fx=0;} if(fy<0){fh+=fy;fy=0;}
+    if(fx+fw>1)fw=1-fx; if(fy+fh>1)fh=1-fy;
+    if(fw<=0.01||fh<=0.01){ alert('Crop box is outside the image.'); return; }
+    const sx=fx*NW, sy=fy*NH, sw=fw*NW, sh=fh*NH;
+    const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(sw)); c.height=Math.max(1,Math.round(sh));
+    c.getContext('2d').drawImage(img, sx,sy,sw,sh, 0,0,c.width,c.height);
+    const durl=c.toDataURL('image/jpeg',0.85);
+    CALIB.bg=durl;
+    $('calibCanvas').style.backgroundImage='url('+durl+')';
+    CALIB.bgX=box.x; CALIB.bgY=box.y; CALIB.bgScale=100;
+    CALIB.bgWmm=Math.round(box.w/S); CALIB.bgHmm=Math.round(box.h/S);
+    if($('cBgWmm'))$('cBgWmm').value=CALIB.bgWmm; if($('cBgHmm'))$('cBgHmm').value=CALIB.bgHmm; if($('cBgZoom'))$('cBgZoom').value=100;
+    if($('cBgCrop')){ $('cBgCrop').checked=false; toggleBgCrop(); }
+    applyBg();
+    const m=$('cBgMsg'); if(m){ m.style.color='#166534'; m.textContent='Cropped. Adjust size (mm) or position, then 💾 Save (shared).'; }
+  };
+  img.src=CALIB.bg||FORM_BG;
 }
 function bindBgPan(el){
   el.addEventListener('pointerdown',e=>{
@@ -797,7 +869,7 @@ async function loadCalib(){
   const d=defaultCalib();
   if(data&&data.value&&data.value.fields){
     const v=data.value;
-    CALIB={font:v.font||d.font,sizePt:v.sizePt||d.sizePt,spacingMM:v.spacingMM||d.spacingMM,fields:Object.assign(d.fields,v.fields),bg:v.bg||null,bgX:v.bgX||0,bgY:v.bgY||0,bgScale:v.bgScale||100,bgW:v.bgW||100,bgH:v.bgH||100,pageW:v.pageW||165,pageH:v.pageH||200};
+    CALIB={font:v.font||d.font,sizePt:v.sizePt||d.sizePt,spacingMM:v.spacingMM||d.spacingMM,fields:Object.assign(d.fields,v.fields),bg:v.bg||null,bgX:v.bgX||0,bgY:v.bgY||0,bgScale:v.bgScale||100,bgWmm:v.bgWmm||0,bgHmm:v.bgHmm||0,pageW:v.pageW||165,pageH:v.pageH||200};
   } else { CALIB=d; }
 }
 async function changeBg(input){
@@ -819,8 +891,8 @@ async function changeBg(input){
       dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(file);});
     } else { if(m){m.style.color='#a52a2a';m.textContent='Use a PDF or image file.';} return; }
     CALIB.bg=dataUrl;
-    CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; CALIB.bgW=100; CALIB.bgH=100;
-    if($('cBgZoom'))$('cBgZoom').value=100; if($('cBgW'))$('cBgW').value=100; if($('cBgH'))$('cBgH').value=100;
+    CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; CALIB.bgWmm=PAGE_W; CALIB.bgHmm=PAGE_H;
+    if($('cBgZoom'))$('cBgZoom').value=100; if($('cBgWmm'))$('cBgWmm').value=PAGE_W; if($('cBgHmm'))$('cBgHmm').value=PAGE_H;
     $('calibCanvas').style.backgroundImage='url('+dataUrl+')'; applyBg();
     if(m){m.style.color='#0b3d2e';m.textContent='✓ Background updated — drag empty area to position it, drag fields to match, then Save.';}
   }catch(e){ if(m){m.style.color='#a52a2a';m.textContent='⚠ '+e;} }
