@@ -286,6 +286,7 @@
           <button onclick="resetBg2()" title="Reset background position, size & zoom">↺ pos</button>
         </div></div>
       <div class="spacer">
+        <button onclick="printTest()" title="Print a mm ruler to measure the exact offset">📐 Print ruler test</button>
         <button onclick="resetCalib()">↺ Reset fields</button>
         <button class="primary" onclick="saveCalib()">💾 Save (shared)</button>
         <button onclick="closeCalib()">✕ Close</button>
@@ -629,6 +630,25 @@ function buildOverlay(){
   ov.innerHTML=h;
 }
 function doPrint(){ buildOverlay(); window.print(); }
+function printTest(){
+  applyPageSize();
+  const ov=$('overlay'); const ox=CALIB.offX||0, oy=CALIB.offY||0;
+  const exact=';-webkit-print-color-adjust:exact;print-color-adjust:exact';
+  let h='';
+  h+=`<div style="position:absolute;left:${ox}mm;top:${oy}mm;width:${PAGE_W}mm;height:${PAGE_H}mm;border:0.3mm solid #000;box-sizing:border-box"></div>`;
+  for(let x=0;x<=PAGE_W;x+=5){ const lng=(x%10===0);
+    h+=`<div style="position:absolute;left:${x+ox}mm;top:${oy}mm;width:0;height:${lng?5:3}mm;border-left:0.2mm solid #000"></div>`;
+    if(x%20===0) h+=`<div style="position:absolute;left:${x+ox}mm;top:${oy+5.5}mm;font:6pt sans-serif;transform:translateX(-50%)">${x}</div>`; }
+  for(let y=0;y<=PAGE_H;y+=5){ const lng=(y%10===0);
+    h+=`<div style="position:absolute;left:${ox}mm;top:${y+oy}mm;width:${lng?5:3}mm;height:0;border-top:0.2mm solid #000"></div>`;
+    if(y%20===0) h+=`<div style="position:absolute;left:${ox+5.5}mm;top:${y+oy}mm;font:6pt sans-serif;transform:translateY(-50%)">${y}</div>`; }
+  h+=`<div style="position:absolute;left:${ox}mm;top:${oy}mm;width:12mm;height:0;border-top:0.4mm solid red${exact}"></div>`;
+  h+=`<div style="position:absolute;left:${ox}mm;top:${oy}mm;width:0;height:12mm;border-left:0.4mm solid red${exact}"></div>`;
+  h+=`<div style="position:absolute;left:${ox+13}mm;top:${oy+1}mm;font:7pt sans-serif;color:red${exact}">0,0 &nbsp;(offset X=${ox} Y=${oy}mm)</div>`;
+  h+=`<div style="position:absolute;left:${ox+2}mm;top:${oy+PAGE_H-8}mm;font:6pt sans-serif;color:#444">Ruler in mm. Print at 100% / Actual size, Margins None. Lay over the pre-printed form: read where the form's top-left corner lands → enter that as Print offset.</div>`;
+  ov.innerHTML=h;
+  window.print();
+}
 
 /* ===== calibration (admin) ===== */
 function chipFontPx(){ return (CALIB.sizePt*0.352778*S); }
