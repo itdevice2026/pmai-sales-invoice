@@ -252,11 +252,11 @@
           <input type="number" id="cPageW" value="165" step="1" style="width:64px" onchange="setPageSize()"> ×
           <input type="number" id="cPageH" value="200" step="1" style="width:64px" onchange="setPageSize()">
         </div></div>
-      <div class="fld"><label>Image size (mm)</label>
+      <div class="fld"><label>Image size (mm) — should equal page</label>
         <div style="display:flex;gap:4px;align-items:center">
           <input type="number" id="cBgWmm" step="1" style="width:64px" onchange="setBgMM()" title="Actual width of the form image, in mm"> ×
           <input type="number" id="cBgHmm" step="1" style="width:64px" onchange="setBgMM()" title="Actual height of the form image, in mm">
-          <button onclick="fitBgToPage()" title="Match image size to page size">⤢ Fit page</button>
+          <button onclick="fitBgToPage()" title="Set image = paper: fill 165×200mm exactly, top-left, no pan/zoom">⤢ Image = paper</button>
         </div></div>
       <div class="fld"><label>Print offset (mm) — X × Y</label>
         <div style="display:flex;gap:4px;align-items:center">
@@ -704,8 +704,10 @@ function setPageSize(){
 function setBgZoom(v){ CALIB.bgScale=parseFloat(v)||100; applyBg(); }
 function setBgMM(){ CALIB.bgWmm=parseFloat($('cBgWmm').value)||0; CALIB.bgHmm=parseFloat($('cBgHmm').value)||0; applyBg(); }
 function setOffset(){ CALIB.offX=parseFloat($('cOffX').value)||0; CALIB.offY=parseFloat($('cOffY').value)||0; }
-function fitBgToPage(){ CALIB.bgWmm=PAGE_W; CALIB.bgHmm=PAGE_H;
-  if($('cBgWmm'))$('cBgWmm').value=PAGE_W; if($('cBgHmm'))$('cBgHmm').value=PAGE_H; applyBg(); }
+function fitBgToPage(){ /* image = paper: fill exactly, anchored top-left, no pan/zoom */
+  CALIB.bgWmm=PAGE_W; CALIB.bgHmm=PAGE_H; CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100;
+  if($('cBgWmm'))$('cBgWmm').value=PAGE_W; if($('cBgHmm'))$('cBgHmm').value=PAGE_H; if($('cBgZoom'))$('cBgZoom').value=100;
+  applyBg(); }
 function resetBg2(){ CALIB.bgX=0; CALIB.bgY=0; CALIB.bgScale=100; CALIB.bgWmm=PAGE_W; CALIB.bgHmm=PAGE_H;
   if($('cBgZoom'))$('cBgZoom').value=100; if($('cBgWmm'))$('cBgWmm').value=PAGE_W; if($('cBgHmm'))$('cBgHmm').value=PAGE_H; applyBg(); }
 function ensureMover(){
