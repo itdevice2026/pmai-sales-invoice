@@ -151,6 +151,7 @@
     <input id="searchInv" list="invList" autocomplete="off" placeholder="🔎 Search invoice no." onchange="searchInvoice()" onkeydown="if(event.key==='Enter')searchInvoice()" style="padding:7px 9px;border-radius:7px;border:1px solid #c4ccd4;width:180px">
     <datalist id="invList"></datalist>
     <button id="btnPrint" onclick="doPrint()">🖨 Print on form</button>
+    <button id="btnPdf" onclick="makePdf(true)" title="Open an exact 165×200mm PDF and print it at Actual Size — most reliable alignment">🧾 Print via PDF</button>
     <button id="btnTxn" onclick="openTxn()">📋 Transactions</button>
     <button id="btnDb" onclick="openDb()">📇 Database</button>
     <button id="btnCalib" onclick="openCalib()">🎯 Print Calibration</button>
@@ -288,6 +289,7 @@
       <div class="spacer">
         <button onclick="printTest()" title="Print a mm ruler to measure the exact offset">📐 Print ruler test</button>
         <button onclick="printBgImage()" title="Print the scanned form image at its calibrated size to compare against the original">🖨 Print background image</button>
+        <button onclick="makePdf(false)" title="Save a 165×200mm test PDF to inspect exact placement">🧾 Save test PDF</button>
         <button onclick="resetCalib()">↺ Reset fields</button>
         <button class="primary" onclick="saveCalib()">💾 Save (shared)</button>
         <button onclick="closeCalib()">✕ Close</button>
@@ -404,6 +406,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = "https://emkcwukiqxnvcbhkjiqz.supabase.co";
@@ -631,6 +634,22 @@ function buildOverlay(){
   ov.innerHTML=h;
 }
 function doPrint(){ buildOverlay(); window.print(); }
+function makePdf(doprint){
+  if(!(window.jspdf&&window.jspdf.jsPDF)){ alert('PDF library still loading — try again in a moment.'); return; }
+  buildOverlay(); // fills #overlay with .f spans at exact mm positions (offset already applied)
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm', format:[PAGE_W,PAGE_H], orientation:(PAGE_W>PAGE_H?'landscape':'portrait')});
+  const famMap={helv:'helvetica',times:'times',courier:'courier'};
+  doc.setFont(famMap[CALIB.font]||'helvetica','normal');
+  doc.setFontSize(CALIB.sizePt||9);
+  $('overlay').querySelectorAll('.f').forEach(s=>{
+    const x=parseFloat(s.style.left), y=parseFloat(s.style.top), txt=s.textContent;
+    if(txt && !isNaN(x) && !isNaN(y)) doc.text(txt, x, y, {baseline:'top'});
+  });
+  const no=($('invNo')&&$('invNo').value)||'';
+  if(doprint){ try{ doc.autoPrint(); }catch(e){} window.open(doc.output('bloburl'),'_blank'); }
+  else doc.save('SalesInvoice_'+(no||'form')+'.pdf');
+}
 function printTest(){
   applyPageSize();
   const ov=$('overlay'); const ox=CALIB.offX||0, oy=CALIB.offY||0;
