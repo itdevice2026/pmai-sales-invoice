@@ -287,6 +287,7 @@
         </div></div>
       <div class="spacer">
         <button onclick="printTest()" title="Print a mm ruler to measure the exact offset">📐 Print ruler test</button>
+        <button onclick="printBgImage()" title="Print the scanned form image at its calibrated size to compare against the original">🖨 Print background image</button>
         <button onclick="resetCalib()">↺ Reset fields</button>
         <button class="primary" onclick="saveCalib()">💾 Save (shared)</button>
         <button onclick="closeCalib()">✕ Close</button>
@@ -647,6 +648,16 @@ function printTest(){
   h+=`<div style="position:absolute;left:${ox+13}mm;top:${oy+1}mm;font:7pt sans-serif;color:red${exact}">0,0 &nbsp;(offset X=${ox} Y=${oy}mm)</div>`;
   h+=`<div style="position:absolute;left:${ox+2}mm;top:${oy+PAGE_H-8}mm;font:6pt sans-serif;color:#444">Ruler in mm. Print at 100% / Actual size, Margins None. Lay over the pre-printed form: read where the form's top-left corner lands → enter that as Print offset.</div>`;
   ov.innerHTML=h;
+  window.print();
+}
+function printBgImage(){
+  applyPageSize();
+  const ov=$('overlay'); const ox=CALIB.offX||0, oy=CALIB.offY||0;
+  const src=CALIB.bg||FORM_BG;
+  const z=(CALIB.bgScale||100)/100;
+  const wmm=(CALIB.bgWmm>0?CALIB.bgWmm:PAGE_W)*z, hmm=(CALIB.bgHmm>0?CALIB.bgHmm:PAGE_H)*z;
+  const xmm=(CALIB.bgX||0)/S + ox, ymm=(CALIB.bgY||0)/S + oy;
+  ov.innerHTML=`<img src="${src}" style="position:absolute;left:${xmm}mm;top:${ymm}mm;width:${wmm}mm;height:${hmm}mm;-webkit-print-color-adjust:exact;print-color-adjust:exact">`;
   window.print();
 }
 
