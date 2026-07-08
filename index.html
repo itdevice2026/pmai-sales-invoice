@@ -210,7 +210,7 @@
         <tr><td class="k">Less: VAT</td><td class="v" id="t_lessvat">0.00</td></tr>
         <tr><td class="k">Amount: Net of VAT</td><td class="v" id="t_net">0.00</td></tr>
         <tr><td class="k">Less: Discount <span class="small">(SC/PWD/NAAC/MOV/SP)</span></td><td class="v"><input id="discount" class="num" value="0" oninput="recalc()"></td></tr>
-        <tr><td class="k">Less: Withholding Tax</td><td class="v"><input id="wht" class="num" value="0" oninput="recalc()"></td></tr>
+        <tr><td class="k">Less: Withholding Tax <span class="small">(<input id="whtRate" class="num" style="width:40px;text-align:right" value="0" oninput="recalc()">% of Net)</span></td><td class="v"><input id="wht" class="num" value="0" oninput="recalc()"></td></tr>
         <tr><td class="k">Add: VAT</td><td class="v" id="t_addvat">0.00</td></tr>
         <tr class="total"><td class="k">Total Amount Due</td><td class="v" id="t_due">0.00</td></tr>
       </table></div>
@@ -566,7 +566,11 @@ function recalc(){
   if(inclusive){vatableSales=gV/1.12;vat=gV-vatableSales;} else {vatableSales=gV;vat=gV*0.12;}
   const total=inclusive?(gV+zero+exempt):(gV+vat+zero+exempt);
   const net=total-vat;
-  const discount=parseFloat($('discount').value)||0, wht=parseFloat($('wht').value)||0;
+  const discount=parseFloat($('discount').value)||0;
+  const whtRate=parseFloat($('whtRate').value)||0;
+  let wht;
+  if(whtRate>0){ wht=Math.round((net*whtRate/100+Number.EPSILON)*100)/100; if(document.activeElement!==$('wht')) $('wht').value=wht.toFixed(2); }
+  else { wht=parseFloat($('wht').value)||0; }
   const due=net-discount-wht+vat;
   $('o_vatable').textContent=peso(vatableSales); $('o_vat').textContent=peso(vat);
   $('o_zero').textContent=peso(zero); $('o_exempt').textContent=peso(exempt);
@@ -1363,6 +1367,7 @@ function gather(){
     cust_addr:$('custAddr').value, terms:$('terms').value,
     vat_inclusive:$('vatInclusive').checked,
     discount:parseFloat($('discount').value)||0, wht:parseFloat($('wht').value)||0,
+    wht_rate:parseFloat($('whtRate').value)||0,
     bank:$('bank').value, acct:$('acct').value, check_no:$('check').value,
     items:[...document.querySelectorAll('#itemBody tr')].map(tr=>({
       desc:tr.querySelector('.desc').value, qty:tr.querySelector('.qty').value,
@@ -1377,7 +1382,7 @@ function apply(d){
   $('custName').value=d.cust_name||''; $('custTIN').value=d.cust_tin||'';
   $('custAddr').value=d.cust_addr||''; $('terms').value=d.terms||'';
   $('vatInclusive').checked=d.vat_inclusive!==false;
-  $('discount').value=d.discount??0; $('wht').value=d.wht??0;
+  $('discount').value=d.discount??0; $('wht').value=d.wht??0; $('whtRate').value=d.wht_rate??0;
   $('bank').value=d.bank||''; $('acct').value=d.acct||''; $('check').value=d.check_no||'';
   $('itemBody').innerHTML='';
   (d.items&&d.items.length?d.items:[{}]).forEach(addRow);
