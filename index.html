@@ -594,6 +594,7 @@ function inWords(num){
 
 /* ===== print overlay ===== */
 function span(xmm,ymm,text){ if(text===''||text==null)return ''; const ox=CALIB.offX||0, oy=CALIB.offY||0; return `<span class="f" style="left:${(xmm+ox)}mm;top:${(ymm+oy)}mm">${String(text).replace(/</g,'&lt;')}</span>`; }
+function spanW(xmm,ymm,text,wmm){ if(text===''||text==null)return ''; const ox=CALIB.offX||0, oy=CALIB.offY||0; return `<span class="f" style="left:${(xmm+ox)}mm;top:${(ymm+oy)}mm;width:${wmm}mm;white-space:normal;line-height:1.15">${String(text).replace(/</g,'&lt;')}</span>`; }
 function buildOverlay(){
   applyPageSize();
   const f=CALIB.fields, fam=FONT_FAMILY[CALIB.font]||FONT_FAMILY.helv, ov=$('overlay');
@@ -634,7 +635,7 @@ function buildOverlay(){
   if(wht)h+=span(f.wht.x,f.wht.y,peso(wht));
   h+=span(f.addvat.x,f.addvat.y,$('t_addvat').textContent);
   h+=span(f.due.x,f.due.y,$('t_due').textContent);
-  h+=span(f.words.x,f.words.y,$('amtWords').textContent);
+  h+=spanW(f.words.x,f.words.y,$('amtWords').textContent, Math.max(40,(PAGE_W-f.words.x-5)));
   ov.innerHTML=h;
 }
 function doPrint(){ buildOverlay(); window.print(); }
@@ -648,7 +649,10 @@ function makePdf(doprint){
   doc.setFontSize(CALIB.sizePt||9);
   $('overlay').querySelectorAll('.f').forEach(s=>{
     const x=parseFloat(s.style.left), y=parseFloat(s.style.top), txt=s.textContent;
-    if(txt && !isNaN(x) && !isNaN(y)) doc.text(txt, x, y, {baseline:'top'});
+    if(!txt || isNaN(x) || isNaN(y)) return;
+    const wmm=parseFloat(s.style.width);
+    if(!isNaN(wmm)){ doc.text(doc.splitTextToSize(txt,wmm), x, y, {baseline:'top'}); }
+    else doc.text(txt, x, y, {baseline:'top'});
   });
   const no=($('invNo')&&$('invNo').value)||'';
   if(doprint){ try{ doc.autoPrint(); }catch(e){} window.open(doc.output('bloburl'),'_blank'); }
