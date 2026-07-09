@@ -595,6 +595,8 @@ function inWords(num){
 /* ===== print overlay ===== */
 function span(xmm,ymm,text){ if(text===''||text==null)return ''; const ox=CALIB.offX||0, oy=CALIB.offY||0; return `<span class="f" style="left:${(xmm+ox)}mm;top:${(ymm+oy)}mm">${String(text).replace(/</g,'&lt;')}</span>`; }
 function spanW(xmm,ymm,text,wmm){ if(text===''||text==null)return ''; const ox=CALIB.offX||0, oy=CALIB.offY||0; return `<span class="f" style="left:${(xmm+ox)}mm;top:${(ymm+oy)}mm;width:${wmm}mm;white-space:normal;line-height:1.15">${String(text).replace(/</g,'&lt;')}</span>`; }
+function splitTwo(text){ text=(text||'').trim(); if(!text)return['','']; const w=text.split(/\s+/); if(w.length<2)return[text,'']; const total=text.length; let len=0,best=1,bd=1e9; for(let i=0;i<w.length-1;i++){ len+=w[i].length+1; const d=Math.abs(len-(total-len)); if(d<bd){bd=d;best=i+1;} } return [w.slice(0,best).join(' '), w.slice(best).join(' ')]; }
+function twoLineWords(xmm,ymm,text){ const p=splitTwo(text); const lh=(CALIB.sizePt||9)*0.352778*1.25; let s=''; if(p[0])s+=span(xmm,ymm,p[0]); if(p[1])s+=span(xmm,ymm+lh,p[1]); return s; }
 function buildOverlay(){
   applyPageSize();
   const f=CALIB.fields, fam=FONT_FAMILY[CALIB.font]||FONT_FAMILY.helv, ov=$('overlay');
@@ -635,7 +637,7 @@ function buildOverlay(){
   if(wht)h+=span(f.wht.x,f.wht.y,peso(wht));
   h+=span(f.addvat.x,f.addvat.y,$('t_addvat').textContent);
   h+=span(f.due.x,f.due.y,$('t_due').textContent);
-  h+=spanW(f.words.x,f.words.y,$('amtWords').textContent, Math.max(40,(PAGE_W-f.words.x-5)));
+  h+=twoLineWords(f.words.x,f.words.y,$('amtWords').textContent);
   ov.innerHTML=h;
 }
 function doPrint(){ buildOverlay(); window.print(); }
