@@ -576,7 +576,9 @@ function recalc(){
   $('o_zero').textContent=peso(zero); $('o_exempt').textContent=peso(exempt);
   $('t_total').textContent=peso(total); $('t_lessvat').textContent=peso(vat);
   $('t_net').textContent=peso(net); $('t_addvat').textContent=peso(vat);
-  $('t_due').textContent=peso(due); $('amtWords').textContent=inWords(due);
+  $('t_due').textContent=peso(due);
+  const wtxt=inWords(due), wp=splitTwo(wtxt);
+  $('amtWords').innerHTML = wp[1] ? (wp[0]+' <br>'+wp[1]) : wtxt;
 }
 function inWords(num){
   num=Math.round((num+Number.EPSILON)*100)/100;
