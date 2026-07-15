@@ -611,7 +611,7 @@ function buildOverlay(){
   h+=span(f.custName.x,f.custName.y,$('custName').value);
   h+=span(f.custTIN.x,f.custTIN.y,$('custTIN').value);
   h+=span(f.terms.x,f.terms.y,$('terms').value);
-  h+=span(f.custAddr.x,f.custAddr.y,$('custAddr').value);
+  h+=twoLineWords(f.custAddr.x,f.custAddr.y,$('custAddr').value);
   let i=0;
   document.querySelectorAll('#itemBody tr').forEach(tr=>{
     const desc=tr.querySelector('.desc').value, q=tr.querySelector('.qty').value, p=tr.querySelector('.price').value;
